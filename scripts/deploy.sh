@@ -28,11 +28,9 @@ cp -R public "$DEPLOY_DIR/"
 echo "🧠 复制前端源码..."
 cp -R src "$DEPLOY_DIR/"
 
-# 复制根目录兼容入口
-echo "↪️ 复制根目录兼容入口..."
+# 复制根目录入口
+echo "↪️ 复制根目录入口..."
 cp index.html "$DEPLOY_DIR/"
-cp config.js "$DEPLOY_DIR/"
-cp experiment.js "$DEPLOY_DIR/"
 
 # 复制后端代理
 echo "🌐 复制代理接口..."

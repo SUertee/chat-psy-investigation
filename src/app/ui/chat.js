@@ -339,11 +339,6 @@ function createChatInterface() {
     `;
 }
 
-let chatStep = 0;
-let aiClientPrompt = '';
-
-// experiment.js
-
 function initializeChat(promptKey) {
     // 1. [修复] 清空内存中的聊天历史数据！！！
     // 否则练习二会带上前一个练习的记录，导致 AI 角色混乱
