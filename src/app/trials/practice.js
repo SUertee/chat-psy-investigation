@@ -1,0 +1,1094 @@
+// Video, tutor, practice, and scripted simulation trials.
+function createVideoPromptTrial() {
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: '<h2>接下来进入课程学习阶段</h2><p>请认真观看下面的培训视频。</p>',
+        choices: ['开始观看'],
+        on_load: function() {
+            updateProgress(EXPERIMENT_CONFIG.PROGRESS_STAGES.video);
+            experimentData.timestamps.video_prompt = getCurrentTimestamp();
+        }
+    };
+}
+
+// experiment.js
+
+function createVideoTrial() {
+    // 默认隐藏继续按钮
+    const continueButtonHTML = `
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="jspsych-btn" id="finishVideoButton" onclick="finishVideo()" disabled>
+                我已观看完视频
+            </button>
+            ${DEBUG_MODE ? 
+                `<button class="jspsych-btn" id="skipVideoButton" onclick="finishVideo()" style="background-color: #f44336; margin-left: 10px;">
+                    [DEBUG] 跳过视频
+                </button>` : ''}
+        </div>
+    `;
+
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: `
+            <div class="video-container">
+                <video width="640" height="360" id="trainingVideo" autoplay
+                        oncontextmenu="return false;" 
+                        disablepictureinpicture>
+                    <source src="${EXPERIMENT_CONFIG.TRAINING_VIDEO_PATH}" type="video/mp4">
+                    您的浏览器不支持视频播放。
+                </video>
+            </div>
+            ${continueButtonHTML}
+        `,
+        choices: [],
+        on_load: function() {
+            experimentData.timestamps.video_start = getCurrentTimestamp();
+            
+            const video = document.getElementById('trainingVideo');
+            const finishButton = document.getElementById('finishVideoButton');
+            if (DEBUG_MODE) {
+                if (finishButton) finishButton.disabled = false;
+            }
+            const skipButton = document.getElementById('skipVideoButton');
+            if (skipButton) {
+                skipButton.disabled = false;
+            }            
+            // 确保跳过按钮在加载后立即可用 (DEBUG)
+            skipButton.disabled = false;
+            
+            // 播放视频并禁用用户操作
+            video.onloadeddata = function() {
+                // 尝试播放（浏览器可能限制，但我们会继续设置监听器）
+                video.play().catch(e => { console.warn("Autoplay blocked, user intervention may be required."); });
+                
+                // 禁用进度条拖动，这需要通过JS实现
+                video.addEventListener('seeking', function() {
+                    // 如果用户尝试拖动到未播放过的时间点，则强制回到当前已播放时间
+                    if (video.currentTime > video.currentPlayTime + 5) { // 允许小范围跳转
+                        video.currentTime = video.currentPlayTime;
+                    }
+                    video.currentPlayTime = video.currentTime;
+                });
+                video.currentPlayTime = 0; // 初始化已播放时间
+            };
+
+            // 监听视频播放结束事件
+            video.onended = function() {
+                finishButton.disabled = false; // 视频播放完毕后，启用正式继续按钮
+                finishButton.textContent = '视频播放完毕，继续实验';
+                // 播放结束，可以禁用 DEBUG 按钮
+                skipButton.style.display = 'none'; 
+            };
+            
+            // 确保视频从头开始
+            video.currentTime = 0;
+        }
+    };
+}
+
+// experiment.js - 新增 AI Tutor 相关函数
+
+// 全局变量用于 AI Tutor 倒计时
+let tutorCountdownInterval;
+let tutorTimeLeft = 5 * 60; // 5分钟 = 300秒
+
+function createAITutorTrial() {
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: function() {
+            // 复用我们之前做好的漂亮聊天界面结构，但配色稍作调整以区分
+            const styles = `
+            <style>
+                .tutor-window {
+                    width: 850px; height: 700px; max-width: 95vw; max-height: 90vh;
+                    background-color: #f0f7ff; /* 浅蓝色背景区分 */
+                    margin: 0 auto; border-radius: 8px;
+                    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+                    display: flex; flex-direction: column; text-align: left;
+                    font-family: "Microsoft YaHei", sans-serif; overflow: hidden;
+                }
+                .tutor-header {
+                    height: 60px; background-color: #3498db; color: white;
+                    display: flex; align-items: center; justify-content: space-between;
+                    padding: 0 25px; font-size: 18px; font-weight: 600;
+                }
+                .timer-badge {
+                    background: rgba(255,255,255,0.2); padding: 5px 12px;
+                    border-radius: 20px; font-size: 14px; display: flex; align-items: center; gap: 5px;
+                }
+                /* 复用之前的聊天气泡样式，稍作调整 */
+                .chat-messages { flex: 1; padding: 20px 30px; overflow-y: auto; background-color: #f9fbfd; display: flex; flex-direction: column; gap: 15px; }
+                .message-row { display: flex; align-items: flex-start; max-width: 100%; }
+                .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+                .bubble { max-width: 70%; padding: 12px 16px; border-radius: 8px; font-size: 15px; line-height: 1.6; position: relative; word-wrap: break-word; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+                
+                /* Tutor 样式 */
+                .message-row.ai .avatar { margin-right: 12px; background-color: #3498db; color: #fff; }
+                .message-row.ai .bubble { background-color: #fff; color: #333; border: 1px solid #e1e4e8; border-top-left-radius: 0; }
+                
+                /* 学员样式 */
+                .message-row.user { justify-content: flex-end; }
+                .message-row.user .avatar { margin-left: 12px; background-color: #9b59b6; color: #fff; order: 2; }
+                .message-row.user .bubble { background-color: #e8daef; color: #4a235a; border: 1px solid #d7bde2; order: 1; border-top-right-radius: 0; }
+
+                .input-area { height: 80px; background: #fff; border-top: 1px solid #ddd; display: flex; padding: 15px; gap: 10px; align-items: center; }
+                .tutor-input { flex: 1; height: 100%; border: 1px solid #ddd; border-radius: 4px; padding: 10px; resize: none; outline: none; font-family: inherit; }
+                .tutor-input:focus { border-color: #3498db; }
+                .send-btn { height: 100%; padding: 0 25px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+                .send-btn:hover { background: #2980b9; }
+
+                .finish-bar {
+                    background: #fff; border-top: 1px solid #eee; padding: 10px 20px;
+                    display: flex; justify-content: space-between; align-items: center;
+                }
+                .tip-text { color: #e74c3c; font-size: 0.9em; font-weight: bold; }
+                .next-btn { 
+                    padding: 8px 20px; background: #27ae60; color: white; border: none; 
+                    border-radius: 4px; cursor: not-allowed; opacity: 0.6; transition: 0.2s; 
+                }
+                .next-btn.active { cursor: pointer; opacity: 1; }
+                .next-btn.active:hover { background: #219150; }
+            </style>
+
+            <div class="tutor-window">
+                <div class="tutor-header">
+                    <span>🤖 AI 学习助手</span>
+                    <div class="timer-badge">
+                        <span>⏳</span> <span id="tutorTimer">05:00</span>
+                    </div>
+                </div>
+                
+                <div class="chat-messages" id="tutorMessages">
+                    </div>
+
+                <div class="input-area">
+                    <textarea class="tutor-input" id="tutorInput" placeholder="请输入关于刚才培训内容的疑问（例如：如何判断高风险？）..." onkeypress="handleTutorKeyPress(event)"></textarea>
+                    <button class="send-btn" onclick="sendTutorMessage()">提问</button>
+                </div>
+
+                <div class="finish-bar">
+                    <span class="tip-text" id="questionRequirement">⚠️ 请至少提出 1 个问题才能继续</span>
+                    <button class="next-btn" id="finishTutorBtn" onclick="finishTutorSession()" disabled>
+                        我没有疑问了，进入练习 →
+                    </button>
+                </div>
+            </div>
+            `;
+            return styles;
+        },
+        choices: [],
+        on_load: function() {
+            // 初始化
+            experimentData.timestamps.tutor_start = getCurrentTimestamp();
+            initializeTutorChat();
+            startTutorTimer();
+        },
+        on_finish: function() {
+            clearInterval(tutorCountdownInterval);
+            experimentData.timestamps.tutor_end = getCurrentTimestamp();
+            updateCustomProgress(20);
+        }
+    };
+}
+
+// 初始化 Tutor 聊天
+function finishVideo() {
+    experimentData.timestamps.video_end = getCurrentTimestamp();
+    jsPsych.finishTrial();
+}
+
+// ===== 练习/观摩阶段 =====
+
+function createPracticePromptTrial(sessionNum) {
+    // 这里的数组索引需要注意：sessionNum 为 1 是练习一，为 3 是练习三
+    const titles = { 1: "练习一", 3: "练习二" }; // 你可以自定义显示名称
+    
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: function() {
+            const title = titles[sessionNum] || "模拟练习";
+            let actionText = experimentData.group === 'control' ? "选择" : "输入";
+
+            // 修改这里：让练习一(1)和练习三(3)都显示这段指导语
+            let goalDescription = "";
+            if (sessionNum === 1 || sessionNum === 3) {
+                goalDescription = `
+                    <div style="margin-top: 20px; padding: 15px; background-color: #fff9db; border-radius: 6px; border: 1px solid #f1c40f; font-size: 0.95em; color: #444; line-height: 1.6;">
+                        <strong style="color: #d35400; font-size: 1.1em;">🎯 本次练习目标：建立关系 + 风险评估</strong><br>
+                        <ul style="margin-top: 10px; padding-left: 20px;">
+                            <li>请注意：本阶段<strong>不涉及危机干预</strong>。</li>
+                            <li><strong>结束方式：</strong>当您掌握足够信息进行风险评估后，请点击右上角的 <span style="color: #e91e63; font-weight: bold;">粉红色“结束练习”按钮</span>。</li>
+                            <li><strong style="color: #c0392b;">⚠️ 关键提示：</strong>点击该按钮后将<strong>无法返回</strong>对话。</li>
+                            <li><strong>限时提醒：</strong>对话限时 10 分钟，若未手动结束，系统将自动跳转。</li>
+                        </ul>
+                    </div>
+                `;
+            }
+
+            return `
+                <div style="max-width: 700px; margin: 0 auto; font-family: 'Microsoft YaHei', sans-serif;">
+                    <h2 style="color: #333; margin-bottom: 30px;">${title}</h2>
+                    <div style="background-color: #fff; padding: 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); text-align: left; border: 1px solid #ebebeb; line-height: 1.8; color: #444;">
+                        <p>🧑‍💼 <strong>角色设定：</strong>你是一名进行线上文字支持的朋辈咨询师。</p>
+                        <p>📩 你收到了一条新信息，请仔细<strong>${actionText}</strong>你的回应。</p>
+                        ${goalDescription}
+                    </div>
+                </div>`;
+        },
+        choices: ['开始'],
+        button_html: '<button class="jspsych-btn" style="padding: 10px 35px; background-color: #07c160; color: white; border: none; border-radius: 4px;">%choice%</button>',
+        on_load: function() {
+            experimentData.timestamps[`practice_${sessionNum}_start`] = getCurrentTimestamp();
+            
+            // 进度条逻辑同步更新
+            if (sessionNum === 3) {
+                // 因为跳过了练习二，所以进入练习三（实际的第二个任务）时进度跳到 50%
+                updateCustomProgress(50); 
+            }
+        }
+    };
+}
+
+// ===== 练习/观摩阶段 (已修改：对照组运行脚本) =====
+// experiment.js (在 createPracticeTrial(group) 附近)
+
+// 修复后的 createPracticeTrial 函数
+function createPracticeTrial() {
+    
+    // 创建两个不同的 Trial，在 timeline 中使用 conditional_function 来选择执行
+    const experimentalTrial = {
+        type: jsPsychHtmlButtonResponse, // 仅用于承载聊天界面的容器
+        stimulus: function() {
+            return createChatInterface();
+        },
+        choices: [],
+        on_load: function() {
+            initializeChat();
+            experimentData.timestamps.practice_start = getCurrentTimestamp();
+            startCountdown();
+            showFinishButton();
+        },
+        on_finish: function() {
+            experimentData.timestamps.practice_end = getCurrentTimestamp();
+            hideCountdown();
+            hideFinishButton();
+        }
+    };
+    
+    const controlTrial = {
+        timeline: createScriptedSimulationTimeline(),
+        on_load: function() {
+            experimentData.timestamps.practice_start = getCurrentTimestamp();
+            // 脚本式模拟中不需要倒计时和“完成”按钮
+        },
+        on_finish: function() {
+            experimentData.timestamps.practice_end = getCurrentTimestamp();
+        }
+    };
+
+    // 返回一个 Trial，该 Trial 根据全局分组决定是否运行
+    return {
+        // 使用一个 trial 来承载条件分支
+        timeline: [experimentalTrial, controlTrial],
+        // jsPsych 的 conditionality 是基于当前 trial 是否执行，
+        // 我们通过将两个 trial 包装在一个 block 中，并使用 conditional_function 来控制流程。
+        // 但最简单的方式是直接在 timeline 中使用 conditional_function。
+    };
+}
+
+
+// 由于 jsPsych 的 timeline 是按顺序执行的，我们将使用 conditional_function 来实现逻辑分支。
+
+function createPracticeTimeline(promptKey, startNodeId) {
+    // --- 1. 实验组分支：自由 AI 对话 ---
+    const experimentalTrial = {
+        timeline: [{
+            type: jsPsychHtmlButtonResponse,
+            stimulus: createChatInterface,
+            choices: [],
+            on_load: function() {
+                initializeChat(promptKey); // 使用 AI 角色
+                experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
+                startCountdown();   // 启动倒计时
+                showFinishButton(); // 显示玫粉色按钮
+            },
+            on_finish: function() {
+                hideCountdownAndButton();
+                if (window.countdownTimer) {
+                    clearInterval(window.countdownTimer);
+                    window.countdownTimer = null;
+                }
+                hideCountdown();
+                hideFinishButton();
+                if (experimentData.chatHistory.length > 0) {
+                    experimentData.allPracticeChats[promptKey] = JSON.parse(JSON.stringify(experimentData.chatHistory));
+                }
+            }
+        }],
+        conditional_function: function() { return experimentData.group === 'experimental'; }
+    };
+
+    // --- 2. 对照组分支：脚本模拟 ---
+    const controlTrial = {
+        timeline: createScriptedSimulationTimeline(startNodeId),
+        conditional_function: function() {
+            currentSimulationNodeId = startNodeId;
+            previousAiFeedback = '';
+            return experimentData.group === 'control';
+        },
+        on_load: function() {
+            startCountdown();   // 修复：对照组脚本练习也显示倒计时
+            showFinishButton(); // 修复：对照组脚本练习也显示玫粉色按钮
+        },
+        on_finish: function() {
+            hideCountdown();
+            hideFinishButton();
+        }
+    };
+    return [experimentalTrial, controlTrial];
+}
+// ===== 聊天界面（实验组） =====
+
+function createChatInterface() {
+    // 注入微信PC版风格的 CSS
+    const styles = `
+    <style>
+        /* 1. 聊天主窗口：居中、阴影、圆角 */
+        .chat-window {
+            width: 850px;
+            height: 700px;
+            max-width: 95vw;
+            max-height: 90vh;
+            background-color: #f5f5f5;
+            margin: 0 auto;
+            border-radius: 4px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+            font-family: "Microsoft YaHei", sans-serif;
+            overflow: hidden; /* 防止圆角溢出 */
+        }
+
+        .chat-header {
+            height: 50px;
+            background-color: #f5f5f5;
+            border-bottom: 1px solid #e7e7e7;
+            display: flex;
+            align-items: center;
+            justify-content: space-between; /* 确保标题和右侧控件两端对齐 */
+            padding: 0 20px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            flex-shrink: 0;
+        }
+
+        /* 新增：内嵌倒计时样式，参考 AI Tutor 的设计 */
+        .header-timer-badge {
+            background: #ededed;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 13px;
+            font-weight: normal;
+            color: #e67e22; /* 橙色提醒 */
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-right: 15px;
+        }
+
+        .header-right-area {
+            display: flex;
+            align-items: center;
+        }
+
+        /* 3. 消息列表区域 */
+        .chat-messages {
+            flex: 1; /* 自动撑满剩余高度 */
+            padding: 20px 30px;
+            overflow-y: auto;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            gap: 15px; /* 消息间距 */
+        }
+        
+        /* 滚动条美化 */
+        .chat-messages::-webkit-scrollbar { width: 6px; }
+        .chat-messages::-webkit-scrollbar-thumb { background-color: #cdcdcd; border-radius: 3px; }
+
+        /* 4. 消息气泡行 */
+        .message-row {
+            display: flex;
+            align-items: flex-start;
+            max-width: 100%;
+        }
+
+        /* 头像 */
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* 气泡内容 */
+        .bubble {
+            max-width: 65%;
+            padding: 9px 13px;
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1.6;
+            position: relative;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        /* ---> AI (来访者) 样式 */
+        .message-row.ai { justify-content: flex-start; }
+        .message-row.ai .avatar { margin-right: 10px; background-color: #fff; border: 1px solid #eee; color: #333; }
+        .message-row.ai .bubble { background-color: #ffffff; color: #000; border: 1px solid #ededed; }
+        /* AI气泡小三角 */
+        .message-row.ai .bubble::before {
+            content: ""; position: absolute; left: -6px; top: 12px;
+            width: 0; height: 0;
+            border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+            border-right: 6px solid #fff;
+        }
+
+        /* ---> User (咨询师) 样式 */
+        .message-row.user { justify-content: flex-end; }
+        .message-row.user .avatar { margin-left: 10px; background-color: #1aad19; color: #fff; order: 2; }
+        .message-row.user .bubble { background-color: #95ec69; color: #000; order: 1; }
+        /* User气泡小三角 */
+        .message-row.user .bubble::before {
+            content: ""; position: absolute; right: -6px; top: 12px;
+            width: 0; height: 0;
+            border-top: 6px solid transparent; border-bottom: 6px solid transparent;
+            border-left: 6px solid #95ec69;
+        }
+
+        /* 5. 底部输入区域 */
+        .chat-input-area {
+            height: 160px;
+            background-color: #fff;
+            border-top: 1px solid #ececec;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        /* 工具栏图标 (装饰用) */
+        .chat-toolbar {
+            height: 36px;
+            padding: 0 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            color: #666;
+            font-size: 18px;
+        }
+        .tool-icon { cursor: pointer; opacity: 0.7; transition: 0.2s; }
+        .tool-icon:hover { opacity: 1; }
+
+        /* 输入框 */
+        .chat-textarea {
+            flex: 1;
+            border: none;
+            resize: none;
+            outline: none;
+            padding: 5px 20px;
+            font-size: 15px;
+            line-height: 1.5;
+            font-family: inherit;
+        }
+
+        /* 发送按钮行 */
+        .chat-action-bar {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 20px 10px 0;
+        }
+        
+        .chat-send-btn {
+            background-color: #e9e9e9;
+            color: #000;
+            border: 1px solid #e5e5e5;
+            padding: 6px 25px;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .chat-send-btn:hover {
+            background-color: #129611;
+            color: #fff;
+            border-color: #129611;
+        }
+        
+        .enter-tip { font-size: 12px; color: #999; margin-right: 15px; }
+
+    </style>
+    `;
+
+    // 返回 HTML 结构
+    return styles + `
+        <div class="chat-window">
+            <div class="chat-header">
+                <span>模拟咨询练习</span>
+
+                <div class="header-right-area">
+                    <div class="header-timer-badge">
+                        <span>⏳ 剩余时间:</span>
+                        <span id="headerTimeDisplay">10:00</span> 
+                    </div>
+                </div>
+                <div class="window-controls">
+                    <div class="control-dot" style="background:#ff5f57"></div>
+                    <div class="control-dot" style="background:#ffbd2e"></div>
+                    <div class="control-dot" style="background:#28c940"></div>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                </div>
+
+            <div class="chat-input-area">
+                <div class="chat-toolbar">
+                    <span class="tool-icon">😊</span>
+                    <span class="tool-icon">✂️</span>
+                    <span class="tool-icon">📁</span>
+                    <span class="tool-icon">💬</span>
+                </div>
+                
+                <textarea class="chat-textarea" id="chatInput" 
+                    placeholder="请输入您的回应..." 
+                    autofocus
+                    onkeypress="handleChatKeyPress(event)"></textarea>
+                
+                <div class="chat-action-bar">
+                    <span class="enter-tip">按 Enter 发送</span>
+                    <button class="chat-send-btn" onclick="sendChatMessage()">发送(S)</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+let chatStep = 0;
+let aiClientPrompt = '';
+
+// experiment.js
+
+function initializeChat(promptKey) {
+    // 1. [修复] 清空内存中的聊天历史数据！！！
+    // 否则练习二会带上前一个练习的记录，导致 AI 角色混乱
+    experimentData.chatHistory = []; 
+
+    // 2. 清空旧的聊天记录显示 (DOM)
+    const messagesDiv = document.getElementById('chatMessages');
+    if (messagesDiv) {
+        messagesDiv.innerHTML = '';
+    }
+    
+    // 3. 获取对应的 System Prompt
+    aiClientPrompt = AI_PROMPTS[promptKey];
+    
+    // 4. 提取 Prompt 中的 opening_line 作为开场白
+    // 正则提取 <opening_line>...</opening_line> 内容
+    const match = aiClientPrompt.match(/<opening_line>(.*?)<\/opening_line>/);
+    const openingLine = match ? match[1] : "你好… 我觉得好难受，能跟你聊聊吗……";
+
+    // 5. 添加 AI 开场白到界面
+    addChatMessage('ai', openingLine);
+
+    // 6. [重要] 将开场白也加入到历史记录中，这样 AI 才知道自己说过这句话
+    experimentData.chatHistory.push({
+        timestamp: getCurrentTimestamp(),
+        sender: 'ai',
+        content: openingLine
+    });
+}
+
+// experiment.js - 请完全替换原有的 handleChatKeyPress 函数
+
+function handleChatKeyPress(event) {
+    // 监听回车键 (Enter)，且没有按下 Shift 键
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault(); // 阻止默认的换行行为
+        sendChatMessage();      // 发送消息
+    }
+}
+
+function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // 添加用户消息
+    addChatMessage('user', message);
+    experimentData.chatHistory.push({
+        timestamp: getCurrentTimestamp(),
+        sender: 'user',
+        content: message
+    });
+    
+    // 清空输入框
+    input.value = '';
+    
+    // 调用AI API
+    callAIAPI(message);
+}
+
+// experiment.js - 请完全替换原有的 addChatMessage 函数
+
+function addChatMessage(sender, content) {
+    const messagesDiv = document.getElementById('chatMessages');
+    if (!messagesDiv) return;
+
+    // 创建行容器
+    const rowDiv = document.createElement('div');
+    rowDiv.className = `message-row ${sender}`;
+    
+    // 根据发送者决定头像文字
+    const avatarText = sender === 'ai' ? '来' : '我';
+    
+    // 构建内部 HTML (头像 + 气泡)
+    rowDiv.innerHTML = `
+        <div class="avatar">${avatarText}</div>
+        <div class="bubble">${content}</div>
+    `;
+    
+    // 添加并滚动到底部
+    messagesDiv.appendChild(rowDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function createPDFViewer() {
+    return `
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h3>观摩学习材料</h3>
+            <p>请仔细阅读以下PDF内容，您可以使用鼠标滚轮上下滚动查看。</p>
+        </div>
+        <iframe src="${EXPERIMENT_CONFIG.PDF_PATH}" class="pdf-viewer" id="pdfViewer"></iframe>
+    `;
+}
+
+// ===== 倒计时功能 =====
+// experiment.js
+
+// 1. 启动倒计时（同时开启粉色按钮）
+function startCountdown() {
+    // 关键：先辞退之前所有的报时员，防止时间跑快
+    if (window.countdownTimer) {
+        clearInterval(window.countdownTimer);
+        window.countdownTimer = null;
+    }
+
+    // 重置时间
+    countdownTimeLeft = EXPERIMENT_CONFIG.COUNTDOWN_TIME;
+    
+    // 显示粉色按钮
+    const finishBtn = document.getElementById('finishButton');
+    if (finishBtn) finishBtn.style.display = 'block';
+
+    // 启动新的报时员
+    updateCountdownDisplay();
+    window.countdownTimer = setInterval(() => {
+        countdownTimeLeft -= 1000;
+        
+        // 如果找不到显示数字的地方了，就说明换页了，自动停止
+        const display = document.getElementById('headerTimeDisplay');
+        if (!display) {
+            clearInterval(window.countdownTimer);
+            return;
+        }
+
+        updateCountdownDisplay();
+        
+        if (countdownTimeLeft <= 0) {
+            clearInterval(window.countdownTimer);
+            finishStage(); 
+        }
+    }, 1000);
+}
+
+// 2. 彻底隐藏倒计时和粉色按钮
+function hideCountdownAndButton() {
+    // 辞退报时员
+    if (window.countdownTimer) {
+        clearInterval(window.countdownTimer);
+        window.countdownTimer = null;
+    }
+    
+    // 让倒计时气泡变透明
+    const headerBadge = document.querySelector('.header-timer-badge');
+    if (headerBadge) headerBadge.style.display = 'none';
+
+    // 让粉色按钮变透明
+    const finishBtn = document.getElementById('finishButton');
+    if (finishBtn) finishBtn.style.display = 'none';
+}
+function updateCountdownDisplay() {
+    const minutes = Math.floor(countdownTimeLeft / 60000);
+    const seconds = Math.floor((countdownTimeLeft % 60000) / 1000);
+    const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    const headerDisplay = document.getElementById('headerTimeDisplay');
+    if (headerDisplay) { // 增加安全检查
+        headerDisplay.textContent = timeString;
+        if (minutes < 1) {
+            headerDisplay.style.color = '#e74c3c';
+            headerDisplay.style.fontWeight = 'bold';
+        }
+    }
+
+    const oldDisplay = document.getElementById('timeLeft');
+    if (oldDisplay) { // 增加安全检查
+        oldDisplay.textContent = timeString;
+    }
+}
+
+function hideCountdown() {
+    // 1. 停止计时器
+    if (countdownTimer) clearInterval(countdownTimer);
+    
+    // 2. 尝试寻找旧版倒计时容器
+    const oldCountdown = document.getElementById('countdown');
+    if (oldCountdown) {
+        oldCountdown.style.display = 'none';
+    }
+
+    // 3. 尝试寻找新版标题栏倒计时容器
+    const headerDisplay = document.getElementById('headerTimeDisplay');
+    if (headerDisplay) {
+        // 找到它父级那个带背景的“气泡”并隐藏
+        const badge = headerDisplay.closest('.header-timer-badge');
+        if (badge) {
+            badge.style.display = 'none';
+        } else {
+            headerDisplay.style.display = 'none';
+        }
+    }
+}
+
+function showFinishButton() {
+    const btn = document.getElementById('finishButton');
+    if (btn) {
+        btn.style.display = 'block';
+    } else {
+        // 如果找不到按钮，尝试在 500ms 后重新查找一次
+        setTimeout(() => {
+            const retryBtn = document.getElementById('finishButton');
+            if (retryBtn) retryBtn.style.display = 'block';
+        }, 500);
+    }
+}
+
+function hideFinishButton() {
+    document.getElementById('finishButton').style.display = 'none';
+}
+
+function finishStage() {
+    console.log("正在结束当前阶段...");
+    
+    // 如果是在练习一或练习三阶段（即你说的练习一和练习二）
+    const currentTrial = jsPsych.getCurrentTrial();
+    // 检查是否在对话练习中
+    if (document.getElementById('chatMessages')) {
+        showCrisisAssessmentModal(); // 调用新写的弹窗函数
+    } else {
+        // 非练习阶段直接结束
+        proceedToNextStage();
+    }
+}
+
+// 提取原有的结束逻辑为独立函数
+function proceedToNextStage() {
+    if (window.countdownTimer) {
+        clearInterval(window.countdownTimer);
+        window.countdownTimer = null;
+    }
+    hideCountdown();
+    hideFinishButton();
+    jsPsych.finishTrial();
+}
+
+// ===== 后测问卷 =====
+function createPosttestQuestionnaire() {
+    return createQuestionnaireTrial('posttest', QUESTIONNAIRES.posttest);
+}
+
+// ===== 二次练习提示 =====
+function createSecondPracticePromptTrial() {
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: '<h2>接下来再次进入练习阶段</h2><p>请继续与AI虚拟来访者进行对话练习。</p>',
+        choices: ['开始'],
+        on_load: function() {
+            updateProgress(EXPERIMENT_CONFIG.PROGRESS_STAGES.practice2);
+            experimentData.timestamps.second_practice_prompt = getCurrentTimestamp();
+        }
+    };
+}
+
+// ===== 第二次练习 =====
+// experiment.js
+
+function createSecondPracticeTrial() {
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: function() {
+            return createChatInterface(); // 调用统一的聊天界面模板
+        },
+        choices: [],
+        on_load: function() {
+            // 1. 记录时间戳
+            experimentData.timestamps.second_practice_start = getCurrentTimestamp();
+            
+            // 2. 初始化 AI 角色 (对照组和实验组统一使用 SECOND_CLIENT)
+            initializeChat('SECOND_CLIENT'); 
+            
+            // 3. 【核心修复】显式启动 UI 元素
+            if (typeof startCountdown === 'function') {
+                startCountdown(); // 启动 10 分钟倒计时
+            }
+            if (typeof showFinishButton === 'function') {
+                showFinishButton(); // 显示玫粉色结束按钮
+            }
+        },
+        on_finish: function() {
+            // 4. 清理 UI 状态
+            hideCountdownAndButton();
+            if (window.countdownTimer) {
+                clearInterval(window.countdownTimer);
+                window.countdownTimer = null;
+            }
+            hideCountdown();
+            hideFinishButton();
+            
+            // 5. 存储对话记录
+            experimentData.allPracticeChats['practice_2_retry'] = JSON.parse(JSON.stringify(experimentData.chatHistory));
+        }
+    };
+}
+
+
+
+// ===== 危机等级评估 =====
+function createScriptedSimulationTimeline(startNodeId) {
+    // 作用域变量，用于在 choices 和 on_finish 之间传递当前节点的选项数据
+    let lastNodeOptions = [];
+
+    const scriptedTimeline = {
+        timeline: [{
+            type: jsPsychHtmlButtonResponse,
+            on_start: function(trial) {
+                // 1. 确保第一次进入时，将 ID 初始化为传入的 startNodeId (如 'LU_START')
+                if (!currentSimulationNodeId) {
+                    currentSimulationNodeId = startNodeId;
+                }
+                // 记录当前节点ID到数据中，便于调试
+                trial.data = { node_id: currentSimulationNodeId };
+            },
+            stimulus: function () {
+                // 获取当前节点配置
+                const currentNode = SCRIPTED_SIMULATION_NODES[currentSimulationNodeId];
+                
+                // 错误处理
+                if (!currentNode) {
+                    return `<div style="color:red; padding:20px;">Error: Node [${currentSimulationNodeId}] not found in config.</div>`;
+                }
+
+                let html = `<h2>${currentNode.title || '模拟练习'}</h2>`;
+
+                // --- 渲染逻辑分支 ---
+                
+                // 情况 A: 开始或结束节点 (通常只有文本，没有来访者反馈框)
+                // 判断依据：ID包含 START 或 END，或者没有 ai_feedback 且有 text
+                if ((currentNode.id && (currentNode.id.includes('START') || currentNode.id.includes('END'))) || currentNode.text) {
+                     html += `<div style="margin: 20px 0; font-size: 1.1em; line-height: 1.6;">${currentNode.text || ''}</div>`;
+                } 
+                // 情况 B: 对话交互节点
+                else {
+                    // 获取显示的来访者内容：
+                    // 优先显示 previousAiFeedback (上一轮选择导致的后果)，
+                    // 如果为空，则显示当前节点的默认 ai_feedback
+                    const feedbackText = previousAiFeedback || currentNode.ai_feedback || '(无内容)';
+
+                    // 渲染来访者气泡
+                    html += `
+                        <div style="margin: 20px 0; padding: 20px; background-color: #f0f4f8; border-left: 5px solid #4682B4; border-radius: 4px; text-align: left;">
+                            <div style="font-weight: bold; color: #2c3e50; margin-bottom: 8px;">来访者：</div>
+                            <div style="font-size: 1.1em; line-height: 1.5; color: #34495e;">${feedbackText}</div>
+                        </div>
+                    `;
+                    
+                    html += `<p style="margin-top: 25px; font-weight: bold; color: #555;">请选择您的回应：</p>`;
+                }
+                
+                return html;
+            },
+            choices: function () {
+                const currentNode = SCRIPTED_SIMULATION_NODES[currentSimulationNodeId];
+                if (!currentNode) return ['退出 (配置错误)'];
+                
+                // 获取选项列表 (兼容 options 对象数组 和 choices 字符串数组)
+                lastNodeOptions = currentNode.options || currentNode.choices || ['继续'];
+                
+                // jsPsych 需要字符串数组作为按钮标签
+                return lastNodeOptions.map(opt => {
+                    // 如果是对象则取 .text，如果是字符串直接返回
+                    return typeof opt === 'object' ? opt.text : opt;
+                });
+            },
+            // 自定义按钮样式：让长文本选项左对齐，更像对话列表
+            button_html: `<button class="jspsych-btn" style="display:block; width:100%; margin-bottom:10px; text-align:left; padding:10px;">%choice%</button>`,
+            on_finish: function (data) {
+                const currentNode = SCRIPTED_SIMULATION_NODES[currentSimulationNodeId];
+                
+                // 获取用户选了第几个按钮
+                const responseIndex = data.response;
+                const selectedOption = lastNodeOptions[responseIndex];
+                
+                // --- 1. 数据记录 ---
+                if (!experimentData.responses.scripted_simulation) {
+                    experimentData.responses.scripted_simulation = [];
+                }
+
+                // 只有当这是一个有效的交互节点时才记录 (START节点可选记录，这里记录所有)
+                experimentData.responses.scripted_simulation.push({
+                    timestamp: getCurrentTimestamp(),
+                    node_id: currentSimulationNodeId,
+                    user_choice_index: responseIndex,
+                    // 记录选项文本
+                    user_choice_text: typeof selectedOption === 'object' ? selectedOption.text : selectedOption,
+                    // 记录结果类型 (success/error等)
+                    outcome_type: typeof selectedOption === 'object' ? selectedOption.type : 'navigation',
+                    // 记录该选项导致的AI反馈
+                    ai_response: typeof selectedOption === 'object' ? selectedOption.response : null
+                });
+
+                // --- 2. 状态更新 (为下一屏做准备) ---
+                
+                // 更新下一次显示的来访者反馈
+                if (typeof selectedOption === 'object' && selectedOption.response) {
+                    previousAiFeedback = selectedOption.response;
+                } else {
+                    // 如果没有特定response (比如简单的页面跳转)，清空 previousAiFeedback，
+                    // 这样下一页就会显示它自己的 ai_feedback 默认值
+                    previousAiFeedback = '';
+                }
+
+                // 计算下一个节点 ID
+                let nextId = null;
+                if (typeof selectedOption === 'object' && selectedOption.next) {
+                    nextId = selectedOption.next;
+                } else if (currentNode.next) {
+                    // 如果选项里没写 next，但节点本身有 next (用于 START/END 这种简单节点)
+                    nextId = currentNode.next;
+                }
+
+                // 更新全局指针
+                currentSimulationNodeId = nextId;
+            }
+        }],
+        // 循环控制函数
+        loop_function: function () {
+            // 只要 currentSimulationNodeId 不为空，且在配置表中存在，就继续循环
+            if (currentSimulationNodeId && SCRIPTED_SIMULATION_NODES[currentSimulationNodeId]) {
+                return true;
+            }
+            // 否则结束当前 timeline (例如 next 为 null 或 undefined 时)
+            return false;
+        }
+    };
+
+    return [scriptedTimeline];
+}
+
+function showCrisisAssessmentModal() {
+    // 注入弹窗 CSS
+    const modalStyle = `
+    <div id="crisisModal" style="
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); z-index: 10000;
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'Microsoft YaHei', sans-serif;">
+        <div style="
+            background: white; padding: 30px; border-radius: 12px;
+            width: 500px; max-width: 90%; box-shadow: 0 5px 25px rgba(0,0,0,0.2);">
+            <h3 style="margin-top:0; color:#2c3e50;">请完成危机等级评估</h3>
+            <p style="color:#666; font-size:14px;">基于您与来访者的对话，请评估其危机等级：</p>
+            
+            <div style="display:flex; justify-content:space-around; margin: 20px 0; background:#f8f9fa; padding:15px; border-radius:8px;">
+                <label style="cursor:pointer;"><input type="radio" name="modal_crisis_level" value="high"> 🔴 高风险</label>
+                <label style="cursor:pointer;"><input type="radio" name="modal_crisis_level" value="medium"> 🟡 中风险</label>
+                <label style="cursor:pointer;"><input type="radio" name="modal_crisis_level" value="low"> 🟢 低风险</label>
+            </div>
+            
+            <p style="color:#666; font-size:14px;">请给出您的评级理由：</p>
+            <textarea id="modal_crisis_reason" 
+                placeholder="请输入评估理由...（建议从C-SSRS结构化评估、风险因素、保护性因素的角度进行分析）" 
+                style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:4px; resize:none; font-family:inherit;"></textarea>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="jspsych-btn" id="submitAssessmentBtn" 
+                    style="padding: 10px 40px; background:#e91e63; color:white; border:none; border-radius:4px; cursor:pointer;"
+                    onclick="handleModalAssessmentSubmit()">提交评估并继续</button>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalStyle);
+}
+
+function handleModalAssessmentSubmit() {
+    const levelEl = document.querySelector('input[name="modal_crisis_level"]:checked');
+    const reasonEl = document.getElementById('modal_crisis_reason');
+    
+    if (!levelEl || !reasonEl.value.trim()) {
+        alert('请完成所有评估项目');
+        return;
+    }
+
+    // 1. 保存当前练习的评估数据
+    if (!experimentData.responses.practice_assessments) {
+        experimentData.responses.practice_assessments = [];
+    }
+    const currentAssessment = {
+        timestamp: getCurrentTimestamp(),
+        level: levelEl.value,
+        reason: reasonEl.value,
+        chatHistory: JSON.parse(JSON.stringify(experimentData.chatHistory)) 
+    };
+    experimentData.responses.practice_assessments.push(currentAssessment);
+
+    // 2. 移除评估弹窗
+    document.getElementById('crisisModal').remove();
+
+    // 3. 【核心修复】：根据已完成的评估次数来判断当前是哪一个 Profile
+    // 第一次提交评估后数组长度为 1 -> 对应 P1 (小B)
+    // 第二次提交评估后数组长度为 2 -> 对应 P2 (小吴)
+    // 第三次提交评估后数组长度为 3 -> 对应 P3 (小C)
+    let practiceCount = experimentData.responses.practice_assessments.length;
+    let practiceType = 'P1'; 
+
+    if (practiceCount === 2) {
+        practiceType = 'P2'; // 第二次练习，对应小吴 (高风险)
+    } else if (practiceCount === 3) {
+        practiceType = 'P3'; // 第三次练习，对应小C (中高风险)
+    }
+
+    // 传递评估数据和修正后的练习类型
+    showSupervisorFeedbackUI(currentAssessment, practiceType);
+}

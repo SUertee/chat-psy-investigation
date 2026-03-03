@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Local secrets and machine-specific config
+src/config/config.local.js
+.env
+.env.*
+
+# Backups and local scratch files
+backups/
+*.tmp
+*.temp
+
+# Generated experiment exports
+*.xlsx
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

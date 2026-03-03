@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验系统测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .status.ok {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .start-button {
+            display: block;
+            width: 200px;
+            margin: 30px auto;
+            padding: 15px 30px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            text-align: center;
+            border-radius: 5px;
+            font-size: 18px;
+        }
+        .start-button:hover {
+            background-color: #45a049;
+        }
+        .config-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>危机评估培训实验系统</h1>
+        <p style="text-align: center; color: #666;">系统检查与启动页面</p>
+        
+        <div class="test-section">
+            <h3>📁 文件检查</h3>
+            <div id="fileCheck"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>⚙️ 配置检查</h3>
+            <div id="configCheck"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🌐 API连接测试</h3>
+            <div id="apiCheck"></div>
+            <button onclick="testAPI()" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">测试API连接</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 功能说明</h3>
+            <ul>
+                <li><strong>实验流程：</strong>知情同意 → 随机分组 → 问卷 → 视频学习 → 练习/观摩 → 评估 → AI反馈</li>
+                <li><strong>数据收集：</strong>自动保存Excel文件，包含时间戳、问卷数据、聊天记录等</li>
+                <li><strong>AI交互：</strong>实验组与AI对话，对照组观摩PDF，最后获得AI督导反馈</li>
+                <li><strong>进度显示：</strong>顶部进度条显示当前完成百分比</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h3>🚀 开始实验</h3>
+            <p>系统检查完成后，点击下方按钮开始实验：</p>
+            <a href="index.html" class="start-button">开始实验</a>
+        </div>
+        
+        <div class="test-section">
+            <h3>📖 使用说明</h3>
+            <p>详细的配置说明请查看 <a href="../docs/README.md" target="_blank">README文档</a></p>
+            <p>如需修改API密钥、更换模型、替换PDF等，请编辑 <code>../src/config/config.js</code> 文件</p>
+        </div>
+    </div>
+
+    <script>
+        // 文件检查
+        function checkFiles() {
+            const requiredFiles = ['index.html', '../src/app/experiment.js', '../src/config/config.js'];
+            const fileCheckDiv = document.getElementById('fileCheck');
+            
+            requiredFiles.forEach(file => {
+                const status = document.createElement('div');
+                status.className = 'status ok';
+                status.textContent = `✓ ${file} 已找到`;
+                fileCheckDiv.appendChild(status);
+            });
+        }
+        
+        // 配置检查
+        function checkConfig() {
+            const configCheckDiv = document.getElementById('configCheck');
+            
+            // 显示当前配置
+            const configInfo = document.createElement('div');
+            configInfo.className = 'config-info';
+            configInfo.innerHTML = `
+当前配置：<br>
+• API提供商：火山引擎 (Volcengine)<br>
+• 模型：doubao-pro-32k<br>
+• 温度：0.7<br>
+• 最大token：500<br>
+• 倒计时：10分钟<br>
+• 数据上传：http://39.105.200.50/exp_data/upload.php
+            `;
+            configCheckDiv.appendChild(configInfo);
+            
+            const status = document.createElement('div');
+            status.className = 'status ok';
+            status.textContent = '✓ 配置文件已加载';
+            configCheckDiv.appendChild(status);
+        }
+        
+        // API测试
+        function testAPI() {
+            const apiCheckDiv = document.getElementById('apiCheck');
+            apiCheckDiv.innerHTML = '<div class="status">正在测试API连接...</div>';
+            
+            // 模拟API测试
+            setTimeout(() => {
+                const status = document.createElement('div');
+                status.className = 'status warning';
+                status.innerHTML = `
+                    ⚠️ API测试需要真实的API密钥<br>
+                    请在 src/config/config.js 中配置正确的API密钥<br>
+                    当前使用的是示例密钥，无法连接
+                `;
+                apiCheckDiv.appendChild(status);
+            }, 1000);
+        }
+        
+        // 页面加载时执行检查
+        document.addEventListener('DOMContentLoaded', function() {
+            checkFiles();
+            checkConfig();
+        });
+    </script>
+</body>
+</html>

@@ -9,7 +9,6 @@
 ### 1. 部署方式
 
 #### 方法一：本地运行
-
 1. 将所有文件放在同一个文件夹中
 2. 使用Python启动本地服务器：
    ```bash
@@ -18,13 +17,11 @@
 3. 在浏览器中访问：`http://localhost:8000`
 
 #### 方法二：部署到服务器
-
 1. 将所有文件上传到Web服务器
 2. 确保index.html可以直接访问
 3. 参与者访问对应的URL即可
 
 ### 2. 文件结构
-
 ```
 experiment/
 ├── index.html          # 主实验页面
@@ -48,20 +45,19 @@ experiment/
 
 ```javascript
 const API_CONFIG = {
-  // 当前使用的API类型 ('volcengine' 或 'openai')
-  CURRENT_API: "volcengine", // ← 改成 'openai'
-
-  // OpenAI API配置
-  OPENAI_API_KEY: "your-openai-api-key-here", // ← 填入您的OpenAI API密钥
-  OPENAI_API_URL: "https://api.openai.com/v1/chat/completions",
-
-  // AI模型参数
-  AI_MODEL: "gpt-3.5-turbo", // ← 改成OpenAI的模型名称
+    // 当前使用的API类型 ('volcengine' 或 'openai')
+    CURRENT_API: 'volcengine',  // ← 改成 'openai'
+    
+    // OpenAI API配置
+    OPENAI_API_KEY: "your-openai-api-key-here",  // ← 填入您的OpenAI API密钥
+    OPENAI_API_URL: "https://api.openai.com/v1/chat/completions",
+    
+    // AI模型参数
+    AI_MODEL: "gpt-3.5-turbo",  // ← 改成OpenAI的模型名称
 };
 ```
 
 **修改步骤（简单3步）：**
-
 1. 将 `CURRENT_API: 'volcengine'` 改成 `CURRENT_API: 'openai'`
 2. 在 `OPENAI_API_KEY` 处填入您的OpenAI API密钥
 3. 将 `AI_MODEL` 改成您想使用的OpenAI模型名称（如 'gpt-3.5-turbo' 或 'gpt-4'）
@@ -80,20 +76,16 @@ AI_STREAM: false,         // 是否使用流式输出（建议保持false）
 
 **更换火山引擎API密钥：**
 找到这一行：
-
 ```javascript
 VOLCENGINE_API_KEY: "your-volcengine-api-key-here",
 ```
-
 把引号里的内容替换成您的新API密钥即可。
 
 **更换OpenAI API密钥：**
 找到这一行：
-
 ```javascript
 OPENAI_API_KEY: "your-openai-api-key-here",
 ```
-
 把引号里的内容替换成您的OpenAI API密钥。
 
 ### 修改PDF文件
@@ -101,7 +93,6 @@ OPENAI_API_KEY: "your-openai-api-key-here",
 对照组需要观摩PDF材料，当前使用的是占位文件 `sample.pdf`。
 
 **替换PDF的步骤：**
-
 1. 准备您的PDF文件（比如叫 `training_material.pdf`）
 2. 将PDF文件放入项目文件夹
 3. 打开 `src/config/config.js`
@@ -120,9 +111,9 @@ OPENAI_API_KEY: "your-openai-api-key-here",
 
 ```javascript
 const EXPERIMENT_CONFIG = {
-  COUNTDOWN_TIME: 10 * 60 * 1000, // 倒计时时间（毫秒）
-  DATA_UPLOAD_URL: "http://39.105.200.50/exp_data/upload.php", // 数据上传地址
-  TRAINING_VIDEO_PATH: "视频URL", // 培训视频路径
+    COUNTDOWN_TIME: 10 * 60 * 1000,  // 倒计时时间（毫秒）
+    DATA_UPLOAD_URL: "http://39.105.200.50/exp_data/upload.php",  // 数据上传地址
+    TRAINING_VIDEO_PATH: "视频URL",  // 培训视频路径
 };
 ```
 
@@ -174,7 +165,6 @@ const EXPERIMENT_CONFIG = {
 ### 数据格式
 
 所有数据保存在Excel文件中，包含多个工作表：
-
 - 基本信息
 - 时间戳
 - 问卷数据
@@ -210,12 +200,10 @@ const EXPERIMENT_CONFIG = {
 ### AI虚拟来访者
 
 系统包含两个AI虚拟来访者角色：
-
 - **小B**：学业压力导致的自杀倾向
 - **小C**：校园霸凌导致的自杀倾向
 
 AI会根据设定的角色特点进行回应，包括：
-
 - 口语化的表达方式
 - 情绪化的反应
 - 逐步透露信息
@@ -224,7 +212,6 @@ AI会根据设定的角色特点进行回应，包括：
 ### AI督导
 
 系统会自动分析参与者的对话记录，从四个维度提供反馈：
-
 1. **建立关系** - 共情、倾听技巧
 2. **评估风险因素** - 识别关键风险点
 3. **评估保护性因素** - 探索保护性因素
@@ -273,7 +260,6 @@ AI会根据设定的角色特点进行回应，包括：
 ## 📞 技术支持
 
 如有技术问题，可以：
-
 1. 检查浏览器控制台错误信息
 2. 确认API配置是否正确
 3. 验证网络连接是否正常
@@ -292,7 +278,6 @@ AI会根据设定的角色特点进行回应，包括：
 ---
 
 **注意事项：**
-
 - 本项目使用jsPsych 7.3.3版本
 - 需要现代浏览器支持
 - API调用需要稳定的网络连接

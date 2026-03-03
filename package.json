@@ -1,0 +1,15 @@
+{
+  "name": "experiment",
+  "version": "1.0.0",
+  "description": "这是一个基于jsPsych的心理学实验系统，用于研究AI辅助危机评估培训的效果。参与者可以通过网页链接直接参与实验，无需下载任何软件。",
+  "main": "experiment.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.6"
+  }
+}
