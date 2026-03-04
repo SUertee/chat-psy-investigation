@@ -6,42 +6,52 @@
 
 ## 🚀 快速开始
 
-### 1. 部署方式
+### 1. 运行方式
 
-#### 方法一：本地运行
-1. 将所有文件放在同一个文件夹中
-2. 使用Python启动本地服务器：
+#### 方法一：本地运行前端
+1. 在项目根目录启动静态服务：
    ```bash
-   python -m http.server 8000
+   ./scripts/run-client.sh
    ```
-3. 在浏览器中访问：`http://localhost:8000`
+2. 在浏览器中访问：`http://localhost:8000`
 
-#### 方法二：部署到服务器
-1. 将所有文件上传到Web服务器
-2. 确保index.html可以直接访问
-3. 参与者访问对应的URL即可
+#### 方法二：同时启用配对后端
+1. 保持前端静态服务运行
+2. 启动 FastAPI 后端：
+   ```bash
+   ./scripts/run-server.sh
+   ```
+3. 对照组配对聊天室将通过 `server/` 提供接口
+
+#### 方法三：部署到服务器
+1. 使用 `scripts/deploy-client.sh`
+2. 确保根目录 `index.html` 可以直接访问
+3. 如需配对聊天室，额外启动 `server` 内的 FastAPI 服务
 
 ### 2. 文件结构
 ```
 experiment/
-├── index.html          # 主实验页面
-├── experiment.js       # 实验逻辑代码
-├── config.js          # 配置文件（API密钥、问卷内容等）
-├── sample.pdf         # 对照组使用的PDF占位文件
-└── README.md          # 说明文档
+├── client/             # 前端代码
+│   ├── public/         # 静态入口、资源、vendor
+│   └── src/            # 前端源码
+├── server/             # FastAPI 后端
+├── docs/               # 项目文档和操作记录
+├── scripts/            # 启动和部署脚本
+├── index.html          # 根目录跳转页
+└── README.md           # 项目总说明
 ```
 
 ## 🔧 配置说明
 
 ### 修改API配置
 
-所有配置都在 `config.js` 文件中，您可以轻松修改以下设置：
+前端配置都在 `client/src/config/config.js` 文件中，您可以轻松修改以下设置：
 
 #### 1. 更换API提供商
 
 **从火山引擎切换到OpenAI：**
 
-打开 `src/config/config.js` 文件，找到这部分代码：
+打开 `client/src/config/config.js` 文件，找到这部分代码：
 
 ```javascript
 const API_CONFIG = {
@@ -64,7 +74,7 @@ const API_CONFIG = {
 
 #### 2. 修改AI模型参数
 
-在 `config.js` 中可以调整AI的行为：
+在 `client/src/config/config.js` 中可以调整AI的行为：
 
 ```javascript
 AI_TEMPERATURE: 0.7,      // 值越小，回答越确定；值越大，回答越随机
@@ -95,7 +105,7 @@ OPENAI_API_KEY: "your-openai-api-key-here",
 **替换PDF的步骤：**
 1. 准备您的PDF文件（比如叫 `training_material.pdf`）
 2. 将PDF文件放入项目文件夹
-3. 打开 `src/config/config.js`
+3. 打开 `client/src/config/config.js`
 4. 找到这一行：
    ```javascript
    PDF_PATH: "./sample.pdf",
@@ -107,7 +117,7 @@ OPENAI_API_KEY: "your-openai-api-key-here",
 
 ### 修改实验设置
 
-在 `config.js` 的 `EXPERIMENT_CONFIG` 部分可以修改：
+在 `client/src/config/config.js` 的 `EXPERIMENT_CONFIG` 部分可以修改：
 
 ```javascript
 const EXPERIMENT_CONFIG = {

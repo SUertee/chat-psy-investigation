@@ -103,7 +103,7 @@
             <ul>
                 <li><strong>实验流程：</strong>知情同意 → 随机分组 → 问卷 → 视频学习 → 练习/观摩 → 评估 → AI反馈</li>
                 <li><strong>数据收集：</strong>自动保存Excel文件，包含时间戳、问卷数据、聊天记录等</li>
-                <li><strong>AI交互：</strong>实验组与AI对话，对照组观摩PDF，最后获得AI督导反馈</li>
+                <li><strong>AI/配对交互：</strong>实验组与AI对话，对照组可接入配对聊天室，最后获得AI督导反馈</li>
                 <li><strong>进度显示：</strong>顶部进度条显示当前完成百分比</li>
             </ul>
         </div>
@@ -116,7 +116,7 @@
         
         <div class="test-section">
             <h3>📖 使用说明</h3>
-            <p>详细的配置说明请查看 <a href="../docs/README.md" target="_blank">README文档</a></p>
+            <p>详细的配置说明请查看 <a href="../../docs/README.md" target="_blank">README文档</a></p>
             <p>如需修改API密钥、更换模型、替换PDF等，请编辑 <code>../src/config/config.js</code> 文件</p>
         </div>
     </div>
@@ -124,7 +124,7 @@
     <script>
         // 文件检查
         function checkFiles() {
-            const requiredFiles = ['index.html', '../src/config/config.js', '../src/app/main.js'];
+            const requiredFiles = ['index.html', '../src/config/config.js', '../src/app/main.js', '../src/app/services/paired-chat.js'];
             const fileCheckDiv = document.getElementById('fileCheck');
             
             requiredFiles.forEach(file => {
@@ -144,12 +144,13 @@
             configInfo.className = 'config-info';
             configInfo.innerHTML = `
 当前配置：<br>
-• API提供商：火山引擎 (Volcengine)<br>
-• 模型：doubao-pro-32k<br>
+• AI提供商：OpenAI 兼容接口（当前配置）<br>
+• 对照组后端：FastAPI 配对聊天室<br>
+• 模型：gpt-5-chat-latest<br>
 • 温度：0.7<br>
 • 最大token：500<br>
 • 倒计时：10分钟<br>
-• 数据上传：http://39.105.200.50/exp_data/upload.php
+• 数据上传：http://39.105.200.50/exp_data
             `;
             configCheckDiv.appendChild(configInfo);
             

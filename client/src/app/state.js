@@ -20,6 +20,11 @@ let jsPsych;
 // ===== 修改 1：在 experiment.js 顶部更新全局变量 =====
 let experimentData = {
     participantId: '',
+    participantProfile: {
+        age: null,
+        gender: '',
+        unikey: ''
+    },
     group: '', 
     startTime: '',
     timestamps: {},
@@ -27,6 +32,7 @@ let experimentData = {
         scripted_simulation: [] // 确保脚本记录初始化
     },
     chatHistory: [], // 这是临时的，每次练习都会被清空
+    pairedChatHistory: [],
     tutorChatHistory: [], // AI Tutor 记录
     // >>> 新增：用于永久保存三次练习的完整对话 <<<
     allPracticeChats: {
@@ -35,6 +41,17 @@ let experimentData = {
         practice_3: [],
         practice_2_retry: [] // 如果有二次练习
     },
+    controlPairing: {
+        registered: false,
+        roomId: '',
+        partnerId: '',
+        roomStatus: '',
+        currentRound: 1,
+        assignedRole: '',
+        participantKey: '',
+        lastMessageId: 0
+    },
+    chatMode: 'ai',
     crisisAssessment: {},
     supervisorFeedback: ''
 };

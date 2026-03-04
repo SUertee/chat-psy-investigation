@@ -2,7 +2,7 @@
 node_modules/
 
 # Local secrets and machine-specific config
-src/config/config.local.js
+client/src/config/config.local.js
 .env
 .env.*
 
@@ -10,9 +10,14 @@ src/config/config.local.js
 backups/
 *.tmp
 *.temp
+skills-lock.json
+.agents/
+.claude/
 
 # Generated experiment exports
 *.xlsx
+__pycache__/
+*.pyc
 
 # OS/editor files
 .DS_Store

@@ -21,9 +21,9 @@
    - 第三次问卷（可接受性、开放性问题）
    - 第四次问卷（状态检查）
 
-4. **AI交互系统**
+4. **AI与配对交互系统**
    - 实验组：与AI虚拟来访者对话（微信聊天样式）
-   - 对照组：PDF观摩学习
+   - 对照组：可接入 FastAPI 配对聊天室
    - 10分钟倒计时，可主动结束
 
 5. **AI督导反馈**
@@ -45,14 +45,16 @@
 
 ```
 experiment/
-├── index.html          # 主实验页面（包含所有HTML和CSS）
-├── experiment.js       # 实验逻辑代码（详细注释）
-├── config.js          # 配置文件（所有可修改参数）
-├── sample.pdf         # 对照组PDF占位文件
-├── test.html          # 系统测试页面
-├── deploy.sh          # 部署脚本
-├── README.md          # 详细使用说明
-└── PROJECT_OVERVIEW.md # 项目总览（本文件）
+├── client/             # 前端代码
+│   ├── public/         # 前端入口、静态资源、vendor
+│   ├── src/            # 前端源码
+│   ├── package.json
+│   └── package-lock.json
+├── server/             # FastAPI 后端
+├── docs/               # 文档
+├── scripts/            # 启动与部署脚本
+├── index.html          # 根目录跳转页
+└── README.md           # 项目总说明
 ```
 
 ## 🔧 技术特点
@@ -85,25 +87,24 @@ CURRENT_API: 'volcengine',  // 或 'openai'
 
 1. **上传文件**
    ```bash
-   # 将所有文件放在Web服务器目录
-   cp * /var/www/html/experiment/
+   ./scripts/deploy-client.sh /var/www/html/experiment
    ```
 
 2. **配置API**
    ```javascript
-   // 编辑 src/config/config.js
+   // 编辑 client/src/config/config.js
    VOLCENGINE_API_KEY: "您的实际API密钥"
    ```
 
 3. **访问实验**
    ```
-   http://your-server-ip/experiment/public/index.html
+   http://your-server-ip/experiment/client/public/index.html
    ```
 
 ### 本地测试
 ```bash
-python -m http.server 8000
-# 访问 http://localhost:8000/public/test.html
+python3 -m http.server 8000
+# 访问 http://localhost:8000/client/public/test.html
 ```
 
 ## 📊 数据说明

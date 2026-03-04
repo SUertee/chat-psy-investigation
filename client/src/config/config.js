@@ -48,6 +48,11 @@ const EXPERIMENT_CONFIG = {
     
     // 培训视频路径
     TRAINING_VIDEO_PATH: "http://39.105.200.50/suicide_training.mp4",
+
+    // FastAPI 后端（对照组配对/聊天室）
+    BACKEND_BASE_URL: "http://127.0.0.1:8001/api",
+    MATCH_POLL_INTERVAL_MS: 2000,
+    MATCH_POLL_MAX_ATTEMPTS: 30,
     
     // 实验阶段进度百分比
     PROGRESS_STAGES: {
@@ -474,6 +479,7 @@ const QUESTIONNAIRES = {
                 questions: [
                     { id: "pt_age", type: "number", text: "年龄（填整数）", required: true },
                     { id: "pt_gender", type: "radio", text: "性别", options: ["男", "女"], required: true },
+                    { id: "pt_unikey", type: "text", text: "Unikey（用于生成配对ID）", required: true },
                     { id: "pt_training_hours", type: "number", text: "您先前的危机评估培训/学习经历是（ ）小时（没有训练经历则填0）", required: true },
                     { id: "pt_exp_hours", type: "number", text: "您先前进行危机评估的经验是（ ）小时（没有经历则填0）", required: true },
                     { id: "pt_counsel_hours", type: "number", text: "您先前进行心理咨询（包括热线心理咨询或线下一对一等咨询形式）的经验是（ ）小时（没有则填0）", required: true },

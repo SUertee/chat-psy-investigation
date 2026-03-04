@@ -303,6 +303,7 @@ function createPracticeTimeline(promptKey, startNodeId) {
             stimulus: createChatInterface,
             choices: [],
             on_load: function() {
+                experimentData.chatMode = 'ai';
                 initializeChat(promptKey); // 使用 AI 角色
                 experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
                 startCountdown();   // 启动倒计时
@@ -324,21 +325,36 @@ function createPracticeTimeline(promptKey, startNodeId) {
         conditional_function: function() { return experimentData.group === 'experimental'; }
     };
 
-    // --- 2. 对照组分支：脚本模拟 ---
+    // --- 2. 对照组分支：真人配对聊天室（复用相同 UI） ---
     const controlTrial = {
-        timeline: createScriptedSimulationTimeline(startNodeId),
+        timeline: [{
+            type: jsPsychHtmlButtonResponse,
+            stimulus: createChatInterface,
+            choices: [],
+            on_load: function() {
+                experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
+
+                initializePairedChat(promptKey)
+                    .then(() => {
+                        startCountdown();
+                        showFinishButton();
+                    })
+                    .catch(error => {
+                        console.error('[PAIRED_CHAT] 初始化失败:', error);
+                        alert(`对照组配对失败：${error.message}`);
+                        jsPsych.finishTrial();
+                    });
+            },
+            on_finish: function() {
+                completePairedRound().catch(error => {
+                    console.error('[PAIRED_CHAT] 提交轮次失败:', error);
+                });
+                hideCountdown();
+                hideFinishButton();
+            }
+        }],
         conditional_function: function() {
-            currentSimulationNodeId = startNodeId;
-            previousAiFeedback = '';
             return experimentData.group === 'control';
-        },
-        on_load: function() {
-            startCountdown();   // 修复：对照组脚本练习也显示倒计时
-            showFinishButton(); // 修复：对照组脚本练习也显示玫粉色按钮
-        },
-        on_finish: function() {
-            hideCountdown();
-            hideFinishButton();
         }
     };
     return [experimentalTrial, controlTrial];

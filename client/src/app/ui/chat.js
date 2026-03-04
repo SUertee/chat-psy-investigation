@@ -332,7 +332,7 @@ function createChatInterface() {
                 
                 <div class="chat-action-bar">
                     <span class="enter-tip">按 Enter 发送</span>
-                    <button class="chat-send-btn" onclick="sendChatMessage()">发送(S)</button>
+                    <button class="chat-send-btn" id="chatSendButton" onclick="sendChatMessage()">发送(S)</button>
                 </div>
             </div>
         </div>
@@ -380,6 +380,14 @@ function handleChatKeyPress(event) {
 }
 
 function sendChatMessage() {
+    if (experimentData.chatMode === 'paired') {
+        sendPairedChatMessageFromInput().catch(error => {
+            console.error('[PAIRED_CHAT] 发送消息失败:', error);
+            alert(`发送失败：${error.message}`);
+        });
+        return;
+    }
+
     const input = document.getElementById('chatInput');
     const message = input.value.trim();
     
