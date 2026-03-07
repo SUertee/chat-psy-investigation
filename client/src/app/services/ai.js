@@ -1,4 +1,8 @@
 // AI service calls and feedback rendering.
+function getAiProxyUrl() {
+    return `${EXPERIMENT_CONFIG.BACKEND_BASE_URL}/ai/chat`;
+}
+
 async function callTutorAPI() {
     // 定义 loading 元素的 ID
     const loadingId = 'tutor-loading';
@@ -8,8 +12,7 @@ async function callTutorAPI() {
     console.log(">>> 开始调用 AI Tutor API..."); // [Debug]
 
     try {
-        const apiKey = API_CONFIG.OPENAI_API_KEY;
-        const apiUrl = API_CONFIG.OPENAI_API_URL;
+        const apiUrl = getAiProxyUrl();
 
         // --- 1. 数据清洗 ---
         const messages = [];
@@ -39,8 +42,7 @@ async function callTutorAPI() {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${apiKey}` 
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(requestBody)
         });
@@ -119,13 +121,12 @@ async function callAIAPI(userMessage) {
     `;
 
     try {
-        const apiKey = API_CONFIG.OPENAI_API_KEY; 
-        const apiUrl = API_CONFIG.OPENAI_API_URL;
+        const apiUrl = getAiProxyUrl();
         
         // 1. 后台悄悄开始请求
         const fetchPromise = fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: API_CONFIG.AI_MODEL,
                 messages: [{ role: 'system', content: aiClientPrompt }, ...experimentData.chatHistory.map(msg => ({
@@ -133,7 +134,7 @@ async function callAIAPI(userMessage) {
                     content: String(msg.content)
                 }))],
                 temperature: API_CONFIG.AI_TEMPERATURE,
-                max_completion_tokens: API_CONFIG.AI_MAX_TOKENS,
+                max_tokens: API_CONFIG.AI_MAX_TOKENS,
                 stream: false
             })
         });
@@ -149,9 +150,18 @@ async function callAIAPI(userMessage) {
         `);
 
         const response = await fetchPromise;
-        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+        if (!response.ok) {
+            let detail = `状态码 ${response.status}`;
+            try {
+                const errorPayload = await response.json();
+                detail = errorPayload?.detail || errorPayload?.error?.message || JSON.stringify(errorPayload);
+            } catch (e) {
+                // keep fallback detail
+            }
+            throw new Error(detail);
+        }
         const data = await response.json();
-        const aiResponse = data.choices[0].message.content;
+        const aiResponse = data?.choices?.[0]?.message?.content || '（系统未返回有效内容）';
 
         // 4. 动态计算输入时间 (3-6秒)
         let typingTime = 2000 + (aiResponse.length / 10) * 1000; 
@@ -172,7 +182,7 @@ async function callAIAPI(userMessage) {
     } catch (error) {
         const loadingEl = document.getElementById(loadingId);
         if (loadingEl) loadingEl.closest('.message-row')?.remove();
-        addChatMessage('ai', '（系统提示：网络连接不稳定，请稍后重试）');
+        addChatMessage('ai', `（系统提示：AI暂时不可用：${error.message}）`);
     }
 }
 async function generateSupervisorFeedback() {
@@ -198,14 +208,12 @@ async function generateSupervisorFeedback() {
             .map(msg => `${msg.timestamp} - ${msg.sender}: ${msg.content}`)
             .join('\n');
         
-        const apiKey = API_CONFIG.OPENAI_API_KEY; 
-        const apiUrl = API_CONFIG.OPENAI_API_URL;
+        const apiUrl = getAiProxyUrl();
         
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}` 
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 model: API_CONFIG.AI_MODEL,
@@ -214,7 +222,7 @@ async function generateSupervisorFeedback() {
                     { role: 'user', content: `咨询对话记录：\n${chatHistoryText}\n\n请基于以上对话记录，对我的危机评估技能进行专业反馈。` }
                 ],
                 temperature: 0.7,
-                max_completion_tokens: 2000,
+                max_tokens: 2000,
                 stream: false
             })
         });
@@ -373,7 +381,10 @@ function formatFeedbackContent(text) {
     
     return html;
 }
-async function showSupervisorFeedbackUI(data, type) {
+async function showSupervisorFeedbackUI(data, type, options = {}) {
+    const mode = options.mode || 'supervisor';
+    const mainTitle = mode === 'peer' ? '📋 危机评估复盘报告' : '📋 危机评估督导复盘报告';
+    const secondTitle = mode === 'peer' ? '第二部分：来访者扮演人同辈反馈' : '第二部分：AI 督导专业反馈';
     // 1. 根据你的实验顺序 (小B -> 小吴 -> 小C) 匹配档案
     let activeProfile;
     
@@ -418,7 +429,7 @@ async function showSupervisorFeedbackUI(data, type) {
         <div style="max-width:850px; margin:0 auto; background:white; border-radius:15px; box-shadow:0 10px 50px rgba(0,0,0,0.1); overflow:hidden; animation: fadeIn 0.5s ease;">
             
             <div style="background:linear-gradient(135deg, #1a73e8 0%, #1557b0 100%); color:white; padding:35px; text-align:center;">
-                <h1 style="margin:0; font-size:24px; letter-spacing:1px;">📋 危机评估督导复盘报告</h1>
+                <h1 style="margin:0; font-size:24px; letter-spacing:1px;">${mainTitle}</h1>
                 <p style="margin:10px 0 0; opacity:0.8;">${activeProfile.title}</p>
             </div>
 
@@ -443,7 +454,7 @@ async function showSupervisorFeedbackUI(data, type) {
                 <div style="height:1px; background:#eee; margin:40px 0;"></div>
 
                 <div>
-                    <h3 style="color:#1a73e8; border-left:5px solid #1a73e8; padding-left:15px; margin-bottom:25px;">第二部分：AI 督导专业反馈</h3>
+                    <h3 style="color:#1a73e8; border-left:5px solid #1a73e8; padding-left:15px; margin-bottom:25px;">${secondTitle}</h3>
                     
                     <div id="supFeedbackLoading" style="text-align:center; padding:50px;">
                         <div style="display:inline-block; width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #1a73e8; border-radius:50%; animation:spin 1s linear infinite;"></div>
@@ -477,7 +488,7 @@ async function showSupervisorFeedbackUI(data, type) {
     };
 
     try {
-        const feedback = await callPracticeFeedbackAPI(data);
+        const feedback = await callPracticeFeedbackAPI(data, mode);
         document.getElementById('supFeedbackLoading').style.display = 'none';
         
         // --- 核心修复：消除奇怪符号并美化 Markdown 排版 ---
@@ -496,14 +507,18 @@ async function showSupervisorFeedbackUI(data, type) {
 }
 
 
-async function callPracticeFeedbackAPI(data) {
+async function callPracticeFeedbackAPI(data, mode = 'supervisor') {
     // 【核心改进】明确标注角色，防止 AI 督导张冠李戴
     const chatLog = data.chatHistory.map(m => {
         const roleName = m.sender === 'user' ? '新手咨询师' : '虚拟来访者';
         return `${roleName}: ${m.content}`;
     }).join('\n');
 
-    const prompt = `你是一名资深的心理咨询督导，现在需要对一名“新手咨询师”的模拟练习表现进行专业点评。
+    const roleIntro = mode === 'peer'
+        ? '你是一名认真参与实验的“来访者扮演同辈”，请基于对话体验给出结构化反馈。'
+        : '你是一名资深的心理咨询督导，现在需要对一名“新手咨询师”的模拟练习表现进行专业点评。';
+
+    const prompt = `${roleIntro}
     
     【练习背景】：咨询师正在与一名有自杀倾向的“虚拟来访者”进行初步接触和风险评估。
     【咨询师评估等级】：${data.level === 'high' ? '高风险' : data.level === 'medium' ? '中风险' : '低风险'}
@@ -523,19 +538,29 @@ async function callPracticeFeedbackAPI(data) {
     
     要求：语气专业、严谨且具有指导意义。`;
 
-    // 后续 fetch 逻辑保持不变
-    const response = await fetch(API_CONFIG.OPENAI_API_URL, {
+    const response = await fetch(getAiProxyUrl(), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_CONFIG.OPENAI_API_KEY}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model: API_CONFIG.AI_MODEL,
             messages: [
-                {role: "system", content: "你是一名严谨的心理咨询督导专家。"}, 
+                {role: "system", content: mode === 'peer' ? "你是一名严谨且真诚的同辈反馈者。" : "你是一名严谨的心理咨询督导专家。"}, 
                 {role: "user", content: prompt}
             ],
             temperature: 0.7
         })
     });
+    if (!response.ok) {
+        let detail = `状态码 ${response.status}`;
+        try {
+            const errorPayload = await response.json();
+            detail = errorPayload?.detail || errorPayload?.error?.message || JSON.stringify(errorPayload);
+        } catch (e) {
+            // keep fallback detail
+        }
+        throw new Error(`AI反馈接口失败：${detail}`);
+    }
     const resData = await response.json();
-    return resData.choices[0].message.content.replace(/\n/g, '<br>');
+    const content = resData?.choices?.[0]?.message?.content || '（AI 未返回可解析内容）';
+    return content.replace(/\n/g, '<br>');
 }

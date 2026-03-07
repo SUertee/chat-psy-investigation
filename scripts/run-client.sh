@@ -2,8 +2,9 @@
 
 set -e
 
-PORT=${1:-8000}
+PORT=${1:-8002}
 
 echo "Starting client on http://127.0.0.1:${PORT}"
 cd "$(dirname "$0")/.."
 python3 -m http.server "$PORT"
+，

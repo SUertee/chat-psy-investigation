@@ -49,7 +49,12 @@ let experimentData = {
         currentRound: 1,
         assignedRole: '',
         participantKey: '',
-        lastMessageId: 0
+        lastMessageId: 0,
+        roleInCurrentRound: '',
+        isCounselor: false,
+        activeScenario: '',
+        roundEnded: false,
+        activeRoundNo: 1
     },
     chatMode: 'ai',
     crisisAssessment: {},

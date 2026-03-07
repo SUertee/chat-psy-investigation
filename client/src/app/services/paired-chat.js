@@ -144,11 +144,86 @@ function getParticipantRoomKey(room) {
     return '';
 }
 
+function getRoundScenarioProfile(scenario) {
+    if (scenario === 'xiaowu_high') {
+        return {
+            title: '来访者脚本：小吴（高风险）',
+            identity: '27岁，男性，创业失败负债',
+            pressure: '经济崩盘、家庭断裂、严重失眠与羞耻感',
+            crisis: '存在明确计划与较高意图，需重点评估计划、意图与行为准备'
+        };
+    }
+    return {
+        title: '来访者脚本：小B（低风险）',
+        identity: '17岁，高二女生，学业退步后陷入绝望',
+        pressure: '学业压力、父母指责、失眠与躯体不适',
+        crisis: '存在消极意念，但无明确计划和实施意图'
+    };
+}
+
+function resolveRoundRole(room, roundNo) {
+    const roundInfo = room.rounds.find(item => item.round_no === roundNo) || room.rounds[0];
+    const roomKey = getParticipantRoomKey(room);
+    const isCounselor = roundInfo.counselor_key === roomKey;
+    const profile = getRoundScenarioProfile(roundInfo.scenario);
+    return {
+        roundInfo,
+        isCounselor,
+        roleText: isCounselor ? '咨询师' : '来访者',
+        scenarioText: roundInfo.scenario === 'xiaob_low' ? '小B（低风险）' : '小吴（高风险）',
+        profile
+    };
+}
+
+function mountClientProfilePanel() {
+    const layout = document.querySelector('.chat-layout');
+    if (!layout) return;
+
+    const existing = document.getElementById('pairedClientProfile');
+    if (existing) existing.remove();
+
+    if (experimentData.controlPairing.isCounselor) return;
+
+    const panel = document.createElement('aside');
+    panel.id = 'pairedClientProfile';
+    panel.className = 'chat-profile-panel';
+    panel.innerHTML = getControlClientProfileHTML();
+    layout.appendChild(panel);
+}
+
+function getControlClientProfileHTML() {
+    const profile = experimentData.controlPairing.activeProfile || getRoundScenarioProfile('xiaob_low');
+    return `
+        <h4>${profile.title}</h4>
+        <div class="profile-block"><strong>身份背景：</strong>${profile.identity}</div>
+        <div class="profile-block"><strong>压力来源：</strong>${profile.pressure}</div>
+        <div class="profile-block"><strong>危机线索：</strong>${profile.crisis}</div>
+        <div class="profile-block"><strong>提醒：</strong>请持续以“来访者”视角回应，避免一次性抛出全部细节。</div>
+    `;
+}
+
 function stopPairedChatPolling() {
     if (window.pairedChatPollingInterval) {
         clearInterval(window.pairedChatPollingInterval);
         window.pairedChatPollingInterval = null;
     }
+}
+
+function handlePairedRoomNotFound(error) {
+    const message = String((error && error.message) || '');
+    if (!/room not found/i.test(message)) {
+        return false;
+    }
+
+    stopPairedChatPolling();
+    setChatComposerEnabled(false);
+    experimentData.controlPairing.roomId = '';
+
+    if (!experimentData.controlPairing.roomLostNotified) {
+        experimentData.controlPairing.roomLostNotified = true;
+        alert('配对房间已失效（可能是后端重启导致内存房间清空）。请重新开始配对练习。');
+    }
+    return true;
 }
 
 async function refreshPairedMessages() {
@@ -170,17 +245,40 @@ async function refreshPairedMessages() {
             message.message_id
         );
 
+        if (message.round_no !== experimentData.controlPairing.activeRoundNo) {
+            return;
+        }
+
         experimentData.pairedChatHistory.push(message);
 
-        if (message.sender_id !== experimentData.participantId) {
-            addChatMessage('ai', message.content);
-            experimentData.chatHistory.push({
-                timestamp: message.created_at,
-                sender: 'ai',
-                content: message.content
-            });
+        const isSelf = message.sender_id === experimentData.participantId;
+        if (isSelf) {
+            addChatMessage('user', message.content, { avatarLabel: '我' });
+        } else {
+            const peerAvatar = message.sender_role === 'counselor' ? '资' : '来';
+            addChatMessage('ai', message.content, { avatarLabel: peerAvatar });
         }
+        experimentData.chatHistory.push({
+            timestamp: message.created_at,
+            sender: isSelf ? 'user' : 'ai',
+            content: message.content
+        });
     });
+}
+
+async function monitorPairedRoundStatus() {
+    if (!experimentData.controlPairing.roomId) return;
+    const room = await fetchRoomState();
+    const roundNo = experimentData.controlPairing.activeRoundNo || 1;
+    const roundInfo = room.rounds.find(item => item.round_no === roundNo);
+    if (!roundInfo) return;
+
+    if (roundInfo.status === 'ended' && !experimentData.controlPairing.roundEnded) {
+        experimentData.controlPairing.roundEnded = true;
+        if (!experimentData.controlPairing.isCounselor) {
+            showClientFeedbackModal();
+        }
+    }
 }
 
 function startPairedChatPolling() {
@@ -189,7 +287,12 @@ function startPairedChatPolling() {
     const pollInterval = EXPERIMENT_CONFIG.MATCH_POLL_INTERVAL_MS || 2000;
     window.pairedChatPollingInterval = setInterval(() => {
         refreshPairedMessages().catch(error => {
+            if (handlePairedRoomNotFound(error)) return;
             console.error('[PAIRED_CHAT] 拉取消息失败:', error);
+        });
+        monitorPairedRoundStatus().catch(error => {
+            if (handlePairedRoomNotFound(error)) return;
+            console.error('[PAIRED_CHAT] 拉取房间状态失败:', error);
         });
     }, pollInterval);
 }
@@ -211,11 +314,9 @@ function setChatComposerEnabled(enabled) {
 }
 
 function getControlRoundBrief(room, roundNo) {
-    const roomKey = getParticipantRoomKey(room);
-    const roundInfo = room.rounds.find(item => item.round_no === roundNo) || room.rounds[0];
-    const isCounselor = roundInfo.counselor_key === roomKey;
-    const roleText = isCounselor ? '咨询师' : '来访者';
-    const scenarioText = roundInfo.scenario === 'xiaob_low' ? '小B（低风险）' : '小吴（高风险）';
+    const role = resolveRoundRole(room, roundNo);
+    const roleText = role.roleText;
+    const scenarioText = role.scenarioText;
     return `已进入配对房间。当前为第 ${roundNo} 轮，你的角色是${roleText}。本轮脚本场景：${scenarioText}。`;
 }
 
@@ -223,14 +324,16 @@ async function initializePairedChat(promptKey) {
     experimentData.chatMode = 'paired';
     experimentData.chatHistory = [];
     experimentData.pairedChatHistory = [];
+    experimentData.controlPairing.roomLostNotified = false;
     experimentData.controlPairing.lastMessageId = 0;
+    experimentData.controlPairing.roundEnded = false;
 
     const messagesDiv = document.getElementById('chatMessages');
     if (messagesDiv) {
         messagesDiv.innerHTML = '';
     }
 
-    addChatMessage('ai', '正在连接配对房间，请稍候...');
+    addChatMessage('system', '正在连接配对房间，请稍候...');
     setChatComposerEnabled(false);
 
     await ensureControlParticipantRegistered();
@@ -240,8 +343,15 @@ async function initializePairedChat(promptKey) {
 
     const room = await fetchRoomState();
     const roundNo = getCurrentControlRoundNumber(promptKey);
+    experimentData.controlPairing.activeRoundNo = roundNo;
+    const role = resolveRoundRole(room, roundNo);
+    experimentData.controlPairing.roleInCurrentRound = role.roleText;
+    experimentData.controlPairing.isCounselor = role.isCounselor;
+    experimentData.controlPairing.activeScenario = role.roundInfo.scenario;
+    experimentData.controlPairing.activeProfile = role.profile;
+    mountClientProfilePanel();
 
-    addChatMessage('ai', getControlRoundBrief(room, roundNo));
+    addChatMessage('system', getControlRoundBrief(room, roundNo));
     experimentData.chatHistory.push({
         timestamp: getCurrentTimestamp(),
         sender: 'ai',
@@ -262,7 +372,7 @@ async function sendPairedChatMessageFromInput() {
 
     const roundNo = experimentData.controlPairing.currentRound || 1;
 
-    addChatMessage('user', message);
+    addChatMessage('user', message, { avatarLabel: '我' });
     experimentData.chatHistory.push({
         timestamp: getCurrentTimestamp(),
         sender: 'user',
@@ -305,6 +415,23 @@ async function completePairedRound() {
         }
     );
 
+    experimentData.controlPairing.currentRound = result.current_round;
+    experimentData.controlPairing.roomStatus = result.room_status;
+    return result;
+}
+
+async function endPairedRoundByCounselor() {
+    if (!experimentData.controlPairing.roomId || !experimentData.participantId) {
+        throw new Error('房间未就绪，无法结束本轮。');
+    }
+    const result = await backendRequest(
+        `/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/end-round`,
+        {
+            method: 'POST',
+            body: JSON.stringify({ participant_id: experimentData.participantId })
+        }
+    );
+    experimentData.controlPairing.roundEnded = true;
     experimentData.controlPairing.currentRound = result.current_round;
     experimentData.controlPairing.roomStatus = result.room_status;
     return result;

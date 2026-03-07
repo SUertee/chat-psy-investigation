@@ -9,7 +9,7 @@ function injectQuestionnaireStyles() {
             max-width: 900px;
             margin: 0 auto;
             text-align: left;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
             padding-bottom: 50px;
         }
         

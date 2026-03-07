@@ -13,9 +13,78 @@ function createProgressNode(percent, icon) {
     };
 }
 
-// experiment.js - 请替换 startExperiment 函数
+function isControlChatDebugMode() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('debugMode') === 'control-chat';
+}
+
+function setupControlChatDebugParticipant() {
+    const params = new URLSearchParams(window.location.search);
+    const age = parseInt(params.get('debugAge') || '24', 10);
+    const gender = params.get('debugGender') || '调试';
+    const uniqueSuffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
+    const unikey = params.get('debugUnikey') || `debug_${uniqueSuffix}`;
+
+    experimentData.group = 'control';
+    experimentData.chatMode = 'paired';
+    experimentData.participantProfile = {
+        age,
+        gender,
+        unikey
+    };
+    experimentData.participantId = buildParticipantId(age, gender, unikey);
+    experimentData.controlPairing.registered = false;
+    experimentData.controlPairing.roomId = '';
+    experimentData.controlPairing.partnerId = '';
+    experimentData.controlPairing.roomStatus = '';
+    experimentData.controlPairing.currentRound = 1;
+    experimentData.controlPairing.assignedRole = '';
+    experimentData.controlPairing.participantKey = `${age}_${gender}_${unikey}`;
+    experimentData.controlPairing.lastMessageId = 0;
+    experimentData.timestamps.debug_mode_start = getCurrentTimestamp();
+}
+
+function startControlChatDebugExperiment() {
+    setupControlChatDebugParticipant();
+    initCustomProgressBar();
+    updateCustomProgress(35, '🐞');
+
+    const timeline = [
+        {
+            type: jsPsychHtmlButtonResponse,
+            stimulus: `
+                <div style="max-width: 760px; margin: 0 auto; text-align: left; line-height: 1.8;">
+                    <h2>对照组 Debug 模式</h2>
+                    <p>当前已跳过正式实验流程，直接进入对照组配对聊天室。</p>
+                    <p><strong>调试被试ID：</strong>${experimentData.participantId}</p>
+                    <p><strong>说明：</strong>请在两个浏览器窗口中分别打开这个入口，才能完成配对。</p>
+                </div>
+            `,
+            choices: ['进入聊天室']
+        },
+        createPracticePromptTrial(1),
+        ...createPracticeTimeline('PRACTICE_1', 'START'),
+        {
+            type: jsPsychHtmlButtonResponse,
+            stimulus: `
+                <div style="max-width: 760px; margin: 0 auto; text-align: left; line-height: 1.8;">
+                    <h2>Debug 聊天室结束</h2>
+                    <p>当前调试流程已结束。你可以关闭页面，或返回测试页重新进入。</p>
+                </div>
+            `,
+            choices: ['结束调试']
+        }
+    ];
+
+    jsPsych.run(timeline);
+}
 
 function startExperiment() {
+    if (isControlChatDebugMode()) {
+        startControlChatDebugExperiment();
+        return;
+    }
+
     // 初始化新进度条 (初始 5%)
     initCustomProgressBar();
     updateCustomProgress(5); 

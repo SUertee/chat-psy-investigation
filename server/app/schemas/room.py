@@ -8,6 +8,7 @@ class RoomRound(BaseModel):
     scenario: str
     counselor_key: str
     client_key: str
+    status: str
 
 
 class RoomResponse(BaseModel):
@@ -41,3 +42,16 @@ class RoomLeaveResponse(BaseModel):
     room_id: str
     room_status: str
     ended_by: str
+
+
+class RoomEndRoundRequest(BaseModel):
+    participant_id: str = Field(min_length=1, max_length=128)
+
+
+class RoomEndRoundResponse(BaseModel):
+    room_id: str
+    ended_round: int
+    current_round: int
+    room_status: str
+    ended_by: str
+    already_ended: bool

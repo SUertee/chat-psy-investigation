@@ -33,11 +33,16 @@ uvicorn app.main:app --reload --port 8001
 
 Copy `.env.example` to `.env` if you want to override defaults.
 
+The real AI secret must be stored in `server/.env`, not in the frontend.
+
 Important defaults:
 
 - `APP_NAME=chat-psy-backend`
 - `API_PREFIX=/api`
 - `CORS_ORIGINS=http://localhost:8000,http://127.0.0.1:8000`
+- `AI_PROVIDER=openai`
+- `AI_API_KEY=your-real-api-key-here`
+- `AI_SSL_VERIFY=true` (开发环境若遇到企业代理自签证书，可临时设为 `false`)
 
 ## Notes
 

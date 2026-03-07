@@ -17,6 +17,8 @@ def _now_iso() -> str:
 def _normalize(value: str) -> str:
     return value.strip().lower()
 
+OPENING_LINE = "你好… 我觉得好难受，能跟你聊聊吗……"
+
 
 def build_participant_id(age: int, gender: str, unikey: str) -> str:
     gender_token = _normalize(gender)[:1] or "u"
@@ -138,6 +140,46 @@ class MemoryStore:
             "ready_count": len(room["round_ready"]),
         }
 
+    def end_round(self, room_id: str, participant_id: str) -> dict[str, Any]:
+        room = self.get_room(room_id)
+        if participant_id not in {room["participant_a"], room["participant_b"]}:
+            raise ValueError("participant is not in room")
+
+        round_no = room["current_round"]
+        round_plan = room["rounds"][round_no - 1]
+        expected_counselor_id = room["participant_a"] if round_plan["counselor_key"] == "A" else room["participant_b"]
+        if participant_id != expected_counselor_id:
+            raise ValueError("only counselor can end the current round")
+
+        if round_plan["status"] == "ended":
+            return {
+                "room_id": room_id,
+                "ended_round": round_no,
+                "current_round": room["current_round"],
+                "room_status": room["status"],
+                "ended_by": participant_id,
+                "already_ended": True,
+            }
+
+        round_plan["status"] = "ended"
+        round_plan["ended_by"] = participant_id
+        round_plan["ended_at"] = _now_iso()
+
+        if round_no < len(room["rounds"]):
+            room["current_round"] = round_no + 1
+            self._ensure_round_opening_message(room, room["current_round"])
+        else:
+            room["status"] = "completed"
+
+        return {
+            "room_id": room_id,
+            "ended_round": round_no,
+            "current_round": room["current_round"],
+            "room_status": room["status"],
+            "ended_by": participant_id,
+            "already_ended": False,
+        }
+
     def leave_room(self, room_id: str, participant_id: str) -> dict[str, Any]:
         room = self.get_room(room_id)
         if participant_id not in {room["participant_a"], room["participant_b"]}:
@@ -176,6 +218,31 @@ class MemoryStore:
         self.get_room(room_id)
         return [message for message in self.messages.get(room_id, []) if message["message_id"] > after_id]
 
+    def _append_system_message(self, room: dict[str, Any], round_no: int, sender_id: str, content: str) -> None:
+        sender_key = "A" if room["participant_a"] == sender_id else "B"
+        round_plan = room["rounds"][round_no - 1]
+        sender_role = "counselor" if sender_key == round_plan["counselor_key"] else "client"
+        message = {
+            "message_id": self.next_message_id,
+            "room_id": room["room_id"],
+            "round_no": round_no,
+            "sender_id": sender_id,
+            "sender_key": sender_key,
+            "sender_role": sender_role,
+            "content": content,
+            "created_at": _now_iso(),
+        }
+        self.next_message_id += 1
+        self.messages.setdefault(room["room_id"], []).append(message)
+
+    def _ensure_round_opening_message(self, room: dict[str, Any], round_no: int) -> None:
+        round_plan = room["rounds"][round_no - 1]
+        if round_plan.get("opening_injected"):
+            return
+        client_id = room["participant_a"] if round_plan["client_key"] == "A" else room["participant_b"]
+        self._append_system_message(room, round_no, client_id, OPENING_LINE)
+        round_plan["opening_injected"] = True
+
     def _create_room(self, participant_a: str, participant_b: str) -> dict[str, Any]:
         room_id = f"room_{uuid4().hex[:10]}"
         a_is_first_counselor = random.choice([True, False])
@@ -201,12 +268,16 @@ class MemoryStore:
                     "scenario": "xiaob_low",
                     "counselor_key": round_one_counselor,
                     "client_key": round_one_client,
+                    "status": "active",
+                    "opening_injected": False,
                 },
                 {
                     "round_no": 2,
                     "scenario": "xiaowu_high",
                     "counselor_key": round_two_counselor,
                     "client_key": round_two_client,
+                    "status": "pending",
+                    "opening_injected": False,
                 },
             ],
             "round_ready": set(),
@@ -215,6 +286,7 @@ class MemoryStore:
         self.messages[room_id] = []
         self.participant_room_index[participant_a] = room_id
         self.participant_room_index[participant_b] = room_id
+        self._ensure_round_opening_message(room, 1)
         return room
 
 

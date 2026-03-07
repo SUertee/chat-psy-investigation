@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api.ai import router as ai_router
 from .api.chat import router as chat_router
 from .api.health import router as health_router
 from .api.match import router as match_router
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router, prefix=settings.api_prefix)
+app.include_router(ai_router, prefix=settings.api_prefix)
 app.include_router(participants_router, prefix=settings.api_prefix)
 app.include_router(match_router, prefix=settings.api_prefix)
 app.include_router(rooms_router, prefix=settings.api_prefix)

@@ -18,3 +18,7 @@ def advance_round(room_id: str, participant_id: str) -> dict:
 
 def leave_room(room_id: str, participant_id: str) -> dict:
     return store.leave_room(room_id, participant_id)
+
+
+def end_round(room_id: str, participant_id: str) -> dict:
+    return store.end_round(room_id, participant_id)

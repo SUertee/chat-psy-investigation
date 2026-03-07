@@ -109,11 +109,20 @@ function createChatInterface() {
     // 注入微信PC版风格的 CSS
     const styles = `
     <style>
+        .chat-layout {
+            display: flex;
+            gap: 16px;
+            align-items: stretch;
+            justify-content: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 12px;
+        }
+
         /* 1. 聊天主窗口：居中、阴影、圆角 */
         .chat-window {
-            width: 850px;
+            width: min(850px, 100%);
             height: 700px;
-            max-width: 95vw;
             max-height: 90vh;
             background-color: #f5f5f5;
             margin: 0 auto;
@@ -124,6 +133,50 @@ function createChatInterface() {
             text-align: left;
             font-family: "Microsoft YaHei", sans-serif;
             overflow: hidden; /* 防止圆角溢出 */
+            min-width: 0;
+        }
+
+        .chat-profile-panel {
+            width: 320px;
+            height: 700px;
+            max-height: 90vh;
+            overflow: auto;
+            background: linear-gradient(180deg, #fffaf1 0%, #fff 100%);
+            border: 1px solid #f3d4b6;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.08);
+            padding: 16px;
+            font-family: "Microsoft YaHei", sans-serif;
+            color: #533f2f;
+            line-height: 1.7;
+        }
+        .chat-profile-panel h4 {
+            margin: 0 0 10px 0;
+            color: #b0531f;
+            font-size: 16px;
+        }
+        .chat-profile-panel .profile-block {
+            background: #fff;
+            border: 1px solid #f6dec9;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        @media (max-width: 1180px) {
+            .chat-layout {
+                flex-direction: column;
+                align-items: center;
+            }
+            .chat-window {
+                height: min(700px, 76vh);
+            }
+            .chat-profile-panel {
+                width: min(850px, 100%);
+                height: auto;
+                max-height: 28vh;
+            }
         }
 
         .chat-header {
@@ -297,6 +350,7 @@ function createChatInterface() {
 
     // 返回 HTML 结构
     return styles + `
+        <div class="chat-layout">
         <div class="chat-window">
             <div class="chat-header">
                 <span>模拟咨询练习</span>
@@ -327,7 +381,6 @@ function createChatInterface() {
                 
                 <textarea class="chat-textarea" id="chatInput" 
                     placeholder="请输入您的回应..." 
-                    autofocus
                     onkeypress="handleChatKeyPress(event)"></textarea>
                 
                 <div class="chat-action-bar">
@@ -335,6 +388,7 @@ function createChatInterface() {
                     <button class="chat-send-btn" id="chatSendButton" onclick="sendChatMessage()">发送(S)</button>
                 </div>
             </div>
+        </div>
         </div>
     `;
 }
@@ -410,16 +464,17 @@ function sendChatMessage() {
 
 // experiment.js - 请完全替换原有的 addChatMessage 函数
 
-function addChatMessage(sender, content) {
+function addChatMessage(sender, content, options = {}) {
     const messagesDiv = document.getElementById('chatMessages');
     if (!messagesDiv) return;
 
     // 创建行容器
     const rowDiv = document.createElement('div');
-    rowDiv.className = `message-row ${sender}`;
+    const visualSender = sender === 'system' ? 'ai' : sender;
+    rowDiv.className = `message-row ${visualSender}`;
     
     // 根据发送者决定头像文字
-    const avatarText = sender === 'ai' ? '来' : '我';
+    const avatarText = options.avatarLabel || getChatAvatarLabel(sender);
     
     // 构建内部 HTML (头像 + 气泡)
     rowDiv.innerHTML = `
@@ -430,6 +485,22 @@ function addChatMessage(sender, content) {
     // 添加并滚动到底部
     messagesDiv.appendChild(rowDiv);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function getChatAvatarLabel(sender) {
+    if (sender === 'system') {
+        return '⚙️';
+    }
+    const isPaired = experimentData && experimentData.chatMode === 'paired';
+    if (!isPaired) {
+        return sender === 'ai' ? '来' : '我';
+    }
+
+    const isCounselor = !!(experimentData.controlPairing && experimentData.controlPairing.isCounselor);
+    if (sender === 'ai') {
+        return isCounselor ? '来' : '资';
+    }
+    return '我';
 }
 
 // experiment.js - 修复版 callAIAPI

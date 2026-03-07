@@ -7,11 +7,13 @@ from fastapi import APIRouter, HTTPException
 from ..schemas.room import (
     RoomAdvanceRequest,
     RoomAdvanceResponse,
+    RoomEndRoundRequest,
+    RoomEndRoundResponse,
     RoomLeaveRequest,
     RoomLeaveResponse,
     RoomResponse,
 )
-from ..services.room_service import advance_round, get_room, leave_room
+from ..services.room_service import advance_round, end_round, get_room, leave_room
 
 
 router = APIRouter(tags=["rooms"])
@@ -37,5 +39,13 @@ def advance_round_endpoint(room_id: str, payload: RoomAdvanceRequest) -> dict:
 def leave_room_endpoint(room_id: str, payload: RoomLeaveRequest) -> dict:
     try:
         return leave_room(room_id, payload.participant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/rooms/{room_id}/end-round", response_model=RoomEndRoundResponse)
+def end_round_endpoint(room_id: str, payload: RoomEndRoundRequest) -> dict:
+    try:
+        return end_round(room_id, payload.participant_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -16,10 +16,10 @@
     <style>
         /* 极简样式 - 只保留基本功能 */
         body {
-            font-family: Arial, sans-serif;
+            font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
+            background: radial-gradient(circle at 20% 20%, #f4faf7 0%, #f4f6f9 40%, #eef2f5 100%);
         }
         
         .jspsych-content {
@@ -27,8 +27,8 @@
             margin: 0 auto;
             background: white;
             padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            box-shadow: 0 8px 28px rgba(22, 34, 45, 0.08);
         }
         
         
@@ -93,10 +93,8 @@
         
         .finish-button {
             position: fixed;
-            /* 核心修改：定位在屏幕右侧中间偏下 */
-            top: 60%;                /* 距离顶部 60%，即中间偏下 */
-            right: 30px;             /* 距离右边框 30px，与进度条对齐 */
-            transform: translateY(-50%); /* 确保垂直方向的中心点对齐 */
+            right: 24px;
+            bottom: 28px;
             
             background-color: #c55b7e;
             color: white;
@@ -107,7 +105,7 @@
             z-index: 9998;
             
             /* 形状调整 */
-            width: 130px;            /* 限制宽度，让文字强制换行 */
+            width: 146px;
             line-height: 1.5;
             text-align: center;
             font-size: 15px;
@@ -117,6 +115,16 @@
 
         .finish-button:hover {
             background-color: #b82456;
+        }
+
+        @media (max-width: 1180px) {
+            .finish-button {
+                right: 14px;
+                bottom: 16px;
+                width: 130px;
+                font-size: 14px;
+                padding: 12px 8px;
+            }
         }
 
         

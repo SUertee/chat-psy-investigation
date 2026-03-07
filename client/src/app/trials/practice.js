@@ -346,9 +346,9 @@ function createPracticeTimeline(promptKey, startNodeId) {
                     });
             },
             on_finish: function() {
-                completePairedRound().catch(error => {
-                    console.error('[PAIRED_CHAT] 提交轮次失败:', error);
-                });
+                if (experimentData.chatHistory.length > 0) {
+                    experimentData.allPracticeChats[promptKey] = JSON.parse(JSON.stringify(experimentData.chatHistory));
+                }
                 hideCountdown();
                 hideFinishButton();
             }
@@ -387,7 +387,10 @@ function startCountdown() {
     
     // 显示粉色按钮
     const finishBtn = document.getElementById('finishButton');
-    if (finishBtn) finishBtn.style.display = 'block';
+    if (finishBtn) {
+        const canShowFinish = !(experimentData.chatMode === 'paired' && experimentData.controlPairing && !experimentData.controlPairing.isCounselor);
+        finishBtn.style.display = canShowFinish ? 'block' : 'none';
+    }
 
     // 启动新的报时员
     updateCountdownDisplay();
@@ -471,6 +474,10 @@ function hideCountdown() {
 
 function showFinishButton() {
     const btn = document.getElementById('finishButton');
+    if (experimentData.chatMode === 'paired' && experimentData.controlPairing && !experimentData.controlPairing.isCounselor) {
+        if (btn) btn.style.display = 'none';
+        return;
+    }
     if (btn) {
         btn.style.display = 'block';
     } else {
@@ -483,15 +490,26 @@ function showFinishButton() {
 }
 
 function hideFinishButton() {
-    document.getElementById('finishButton').style.display = 'none';
+    const btn = document.getElementById('finishButton');
+    if (btn) btn.style.display = 'none';
 }
 
 function finishStage() {
     console.log("正在结束当前阶段...");
-    
-    // 如果是在练习一或练习三阶段（即你说的练习一和练习二）
-    const currentTrial = jsPsych.getCurrentTrial();
-    // 检查是否在对话练习中
+
+    if (experimentData.chatMode === 'paired') {
+        if (experimentData.controlPairing && experimentData.controlPairing.isCounselor) {
+            const confirmed = window.confirm('确认结束本轮咨询吗？结束后来访者将同步进入反馈填写。');
+            if (!confirmed) {
+                return;
+            }
+            showCounselorRecordModal();
+            return;
+        }
+        alert('当前由咨询师结束本轮，请等待对方提交。');
+        return;
+    }
+
     if (document.getElementById('chatMessages')) {
         showCrisisAssessmentModal(); // 调用新写的弹窗函数
     } else {
@@ -502,6 +520,9 @@ function finishStage() {
 
 // 提取原有的结束逻辑为独立函数
 function proceedToNextStage() {
+    if (typeof stopPairedChatPolling === 'function') {
+        stopPairedChatPolling();
+    }
     if (window.countdownTimer) {
         clearInterval(window.countdownTimer);
         window.countdownTimer = null;
@@ -542,6 +563,11 @@ function createSecondPracticeTrial() {
         on_load: function() {
             // 1. 记录时间戳
             experimentData.timestamps.second_practice_start = getCurrentTimestamp();
+            // 关键：第三轮统一走 AI 对话，不再沿用配对聊天状态
+            experimentData.chatMode = 'ai';
+            if (typeof stopPairedChatPolling === 'function') {
+                stopPairedChatPolling();
+            }
             
             // 2. 初始化 AI 角色 (对照组和实验组统一使用 SECOND_CLIENT)
             initializeChat('SECOND_CLIENT'); 
@@ -779,4 +805,166 @@ function handleModalAssessmentSubmit() {
 
     // 传递评估数据和修正后的练习类型
     showSupervisorFeedbackUI(currentAssessment, practiceType);
+}
+
+function showCounselorRecordModal() {
+    const html = `
+    <div id="counselorRecordModal" style="
+        position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:10002;
+        display:flex; align-items:center; justify-content:center; font-family:'Microsoft YaHei',sans-serif;">
+        <div style="width:700px; max-width:92vw; background:#fff; border-radius:12px; padding:24px;">
+            <h3 style="margin:0 0 12px 0; color:#2c3e50;">咨询记录</h3>
+            <p style="margin:0 0 14px 0; color:#666;">请填写本轮评估结论与关键依据。</p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div>
+                    <label>风险等级</label>
+                    <select id="recordRiskLevel" style="width:100%; margin-top:6px; padding:8px;">
+                        <option value="">请选择</option>
+                        <option value="high">高风险</option>
+                        <option value="medium">中风险</option>
+                        <option value="low">低风险</option>
+                    </select>
+                </div>
+                <div>
+                    <label>是否有明确计划</label>
+                    <select id="recordPlan" style="width:100%; margin-top:6px; padding:8px;">
+                        <option value="">请选择</option>
+                        <option value="yes">是</option>
+                        <option value="no">否</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top:12px;">
+                <label>评估摘要</label>
+                <textarea id="recordSummary" style="width:100%; height:110px; margin-top:6px; padding:8px;" placeholder="请填写主要风险因素、保护因素、后续建议..."></textarea>
+            </div>
+            <div style="text-align:right; margin-top:16px;">
+                <button class="jspsych-btn" style="background:#e91e63; color:#fff; border:none;" onclick="submitCounselorRecord()">提交并结束本轮</button>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function submitCounselorRecord() {
+    const riskLevel = document.getElementById('recordRiskLevel').value;
+    const hasPlan = document.getElementById('recordPlan').value;
+    const summary = document.getElementById('recordSummary').value.trim();
+    if (!riskLevel || !hasPlan || !summary) {
+        alert('请完整填写咨询记录。');
+        return;
+    }
+
+    if (!experimentData.responses.counselor_records) {
+        experimentData.responses.counselor_records = [];
+    }
+
+    const confirmed = window.confirm('确认提交咨询记录并结束本轮吗？提交后将无法继续本轮对话。');
+    if (!confirmed) {
+        return;
+    }
+
+    experimentData.responses.counselor_records.push({
+        timestamp: getCurrentTimestamp(),
+        room_id: experimentData.controlPairing.roomId,
+        round_no: experimentData.controlPairing.activeRoundNo || 1,
+        risk_level: riskLevel,
+        has_plan: hasPlan,
+        summary,
+        chat_history: JSON.parse(JSON.stringify(experimentData.chatHistory))
+    });
+
+    let roundBeforeEnd = experimentData.controlPairing.activeRoundNo || 1;
+    try {
+        await endPairedRoundByCounselor();
+    } catch (error) {
+        alert(`结束失败：${error.message}`);
+        return;
+    }
+
+    const modal = document.getElementById('counselorRecordModal');
+    if (modal) modal.remove();
+
+    const practiceType = roundBeforeEnd === 1 ? 'P1' : 'P2';
+    const feedbackPayload = {
+        level: riskLevel,
+        reason: summary,
+        chatHistory: JSON.parse(JSON.stringify(experimentData.chatHistory))
+    };
+    showSupervisorFeedbackUI(feedbackPayload, practiceType, { mode: 'peer' });
+}
+
+function showClientFeedbackModal() {
+    if (document.getElementById('clientFeedbackModal')) return;
+    stopPairedChatPolling();
+    hideFinishButton();
+
+    const recordsHtml = experimentData.chatHistory
+        .map(item => {
+            const senderLabel = item.sender === 'user' ? '我' : '咨询师';
+            const bubbleColor = item.sender === 'user' ? '#95ec69' : '#fff';
+            const align = item.sender === 'user' ? 'flex-end' : 'flex-start';
+            return `<div style="display:flex; justify-content:${align}; margin-bottom:8px;">
+                <div style="max-width:85%; background:${bubbleColor}; border:1px solid #eaeaea; border-radius:8px; padding:8px 10px;">
+                    <div style="font-size:12px; color:#777; margin-bottom:4px;">${senderLabel}</div>
+                    <div style="font-size:13px; line-height:1.6;">${item.content}</div>
+                </div>
+            </div>`;
+        })
+        .join('');
+
+    const html = `
+    <div id="clientFeedbackModal" style="position:fixed; inset:0; z-index:10003; background:#f4f6f8; padding:18px; overflow:auto; font-family:'Microsoft YaHei',sans-serif;">
+        <div style="display:grid; grid-template-columns: 1.1fr 0.9fr; gap:16px; max-width:1200px; margin:0 auto;">
+            <section style="background:#fff; border-radius:12px; padding:14px; border:1px solid #e8ecf0;">
+                <h3 style="margin-top:0;">与咨询师聊天记录</h3>
+                <div style="height:72vh; overflow:auto; padding-right:4px;">${recordsHtml}</div>
+            </section>
+            <section style="background:#fff; border-radius:12px; padding:14px; border:1px solid #e8ecf0;">
+                <h3 style="margin-top:0;">来访者反馈表</h3>
+                <label>你感到被理解的程度（1-5）</label>
+                <input id="clientFbEmpathy" type="number" min="1" max="5" style="width:100%; padding:8px; margin:6px 0 12px 0;">
+                <label>你是否愿意继续与该咨询师沟通</label>
+                <select id="clientFbContinue" style="width:100%; padding:8px; margin:6px 0 12px 0;">
+                    <option value="">请选择</option>
+                    <option value="yes">愿意</option>
+                    <option value="unsure">不确定</option>
+                    <option value="no">不愿意</option>
+                </select>
+                <label>补充反馈</label>
+                <textarea id="clientFbNotes" style="width:100%; height:180px; margin-top:6px; padding:8px;" placeholder="请描述你在本轮咨询中的主观体验"></textarea>
+                <div style="text-align:right; margin-top:14px;">
+                    <button class="jspsych-btn" style="background:#27ae60; color:white; border:none;" onclick="submitClientFeedback()">提交反馈</button>
+                </div>
+            </section>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function submitClientFeedback() {
+    const empathy = document.getElementById('clientFbEmpathy').value;
+    const cont = document.getElementById('clientFbContinue').value;
+    const notes = document.getElementById('clientFbNotes').value.trim();
+    if (!empathy || !cont || !notes) {
+        alert('请完整填写反馈表。');
+        return;
+    }
+
+    if (!experimentData.responses.client_feedbacks) {
+        experimentData.responses.client_feedbacks = [];
+    }
+    experimentData.responses.client_feedbacks.push({
+        timestamp: getCurrentTimestamp(),
+        room_id: experimentData.controlPairing.roomId,
+        round_no: experimentData.controlPairing.activeRoundNo || 1,
+        empathy_score: Number(empathy),
+        continue_intent: cont,
+        notes,
+        chat_history: JSON.parse(JSON.stringify(experimentData.chatHistory))
+    });
+
+    const modal = document.getElementById('clientFeedbackModal');
+    if (modal) modal.remove();
+    proceedToNextStage();
 }

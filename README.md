@@ -12,18 +12,21 @@
 
 1. 在项目根目录启动静态服务：
    ```bash
-   ./scripts/run-client.sh
+   ./scripts/run-client.sh 8002
    ```
-2. 在浏览器中访问：`http://localhost:8000`
+2. 在浏览器中访问：
+   - 测试入口：`http://127.0.0.1:8002/client/public/test.html`
+   - 实验入口：`http://127.0.0.1:8002/client/public/index.html`
 
 #### 方法二：同时启用配对后端
 
-1. 保持前端静态服务运行
-2. 启动 FastAPI 后端：
+1. 保持前端静态服务运行（推荐 8002）
+2. 启动 FastAPI 后端（默认 8001）：
    ```bash
    ./scripts/run-server.sh
    ```
-3. 对照组配对聊天室将通过 `server/` 提供接口
+3. 对照组配对聊天室和 AI 代理接口都由 `server/` 提供
+4. 健康检查地址：`http://127.0.0.1:8001/api/health`
 
 #### 方法三：部署到服务器
 
@@ -33,6 +36,46 @@
    ```
 2. 确保根目录 `index.html` 可以直接访问
 3. 如需配对聊天室，额外启动 `server` 内的 FastAPI 服务
+
+#### 方法四：没有 bash 时，手动启动（推荐）
+
+如果你的环境没有 `bash`（例如部分 Windows 环境），可以不用脚本，直接执行命令：
+
+前端（项目根目录）：
+
+```bash
+python3 -m http.server 8002
+```
+
+浏览器访问：`http://127.0.0.1:8002/client/public/index.html`
+
+后端（新开终端，进入 `server/` 目录）：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 -m uvicorn app.main:app --reload --port 8001
+```
+
+后端地址：`http://127.0.0.1:8001`（接口前缀 `/api`）
+
+#### 方法五：Windows PowerShell 启动
+
+前端（项目根目录）：
+
+```powershell
+py -m http.server 8002
+```
+
+后端（进入 `server` 目录）：
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+py -m uvicorn app.main:app --reload --port 8001
+```
 
 ### 2. 文件结构
 
@@ -54,31 +97,17 @@ experiment/
 
 前端配置都在 `client/src/config/config.js` 文件中，您可以轻松修改以下设置：
 
-#### 1. 更换API提供商
+#### 1. AI 调用链路（当前方式）
 
-**从火山引擎切换到OpenAI：**
+当前项目使用“前端 -> 后端代理 -> AI 服务”的方式：
 
-打开 `client/src/config/config.js` 文件，找到这部分代码：
+- 前端请求：`EXPERIMENT_CONFIG.BACKEND_BASE_URL + /ai/chat`
+- 后端读取 `server/.env` 中的 `AI_API_KEY`、`OPENAI_API_URL`、`AI_PROVIDER`
 
-```javascript
-const API_CONFIG = {
-  // 当前使用的API类型 ('volcengine' 或 'openai')
-  CURRENT_API: "volcengine", // ← 改成 'openai'
+说明：
 
-  // OpenAI API配置
-  OPENAI_API_KEY: "your-openai-api-key-here", // ← 填入您的OpenAI API密钥
-  OPENAI_API_URL: "https://api.openai.com/v1/chat/completions",
-
-  // AI模型参数
-  AI_MODEL: "gpt-3.5-turbo", // ← 改成OpenAI的模型名称
-};
-```
-
-**修改步骤（简单3步）：**
-
-1. 将 `CURRENT_API: 'volcengine'` 改成 `CURRENT_API: 'openai'`
-2. 在 `OPENAI_API_KEY` 处填入您的OpenAI API密钥
-3. 将 `AI_MODEL` 改成您想使用的OpenAI模型名称（如 'gpt-3.5-turbo' 或 'gpt-4'）
+- 前端 `config.js` 不再保存真实 API Key。
+- 若 AI 调用失败，请优先检查 `server/.env` 和后端是否已启动。
 
 #### 2. 修改AI模型参数
 
@@ -92,23 +121,19 @@ AI_STREAM: false,         // 是否使用流式输出（建议保持false）
 
 #### 3. 修改API密钥
 
-**更换火山引擎API密钥：**
-找到这一行：
+请修改 `server/.env`（不是前端）：
 
-```javascript
-VOLCENGINE_API_KEY: "your-volcengine-api-key-here",
+```env
+AI_PROVIDER=openai
+AI_API_KEY=你的真实密钥
+OPENAI_API_URL=你的上游地址
 ```
 
-把引号里的内容替换成您的新API密钥即可。
+修改后需要重启后端：
 
-**更换OpenAI API密钥：**
-找到这一行：
-
-```javascript
-OPENAI_API_KEY: "your-openai-api-key-here",
+```bash
+./scripts/run-server.sh
 ```
-
-把引号里的内容替换成您的OpenAI API密钥。
 
 ### 修改PDF文件
 
