@@ -338,12 +338,11 @@ function createQuestionnaireTrial(phase, questionnaireConfig) {
             if (phase === 'pretest' && data.response) {
                 const age = parseInt(data.response.pt_age, 10);
                 const gender = (data.response.pt_gender || '').trim();
-                const unikey = (data.response.pt_unikey || '').trim();
 
-                if (!Number.isNaN(age) && gender && unikey) {
-                    experimentData.participantProfile = { age, gender, unikey };
-                    experimentData.participantId = buildParticipantId(age, gender, unikey);
-                    experimentData.controlPairing.participantKey = `${age}_${gender}_${unikey}`;
+                if (!Number.isNaN(age) && gender) {
+                    experimentData.participantProfile = { age, gender };
+                    experimentData.participantId = '';
+                    experimentData.controlPairing.participantKey = `${age}_${gender}`;
                 }
             }
         }

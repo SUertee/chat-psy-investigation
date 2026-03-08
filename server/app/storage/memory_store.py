@@ -20,11 +20,9 @@ def _normalize(value: str) -> str:
 OPENING_LINE = "你好… 我觉得好难受，能跟你聊聊吗……"
 
 
-def build_participant_id(age: int, gender: str, unikey: str) -> str:
+def build_participant_id(age: int, gender: str, sequence: int) -> str:
     gender_token = _normalize(gender)[:1] or "u"
-    raw = f"{age}-{gender_token}-{_normalize(unikey)}"
-    compact = raw.replace(" ", "")
-    return f"P_{compact}"
+    return f"P_{age}-{gender_token}-{sequence}"
 
 
 def _role_key_from_participant(participant_id: str, room: dict[str, Any]) -> str:
@@ -38,19 +36,24 @@ def _role_key_from_participant(participant_id: str, room: dict[str, Any]) -> str
 @dataclass
 class MemoryStore:
     participants: dict[str, dict[str, Any]] = field(default_factory=dict)
+    participant_seq_counters: dict[str, int] = field(default_factory=dict)
     waiting_queue: deque[str] = field(default_factory=deque)
     participant_room_index: dict[str, str] = field(default_factory=dict)
     rooms: dict[str, dict[str, Any]] = field(default_factory=dict)
     messages: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     next_message_id: int = 1
 
-    def register_participant(self, age: int, gender: str, unikey: str, group_type: str | None = None) -> dict[str, Any]:
-        participant_id = build_participant_id(age, gender, unikey)
+    def register_participant(self, age: int, gender: str, group_type: str | None = None) -> dict[str, Any]:
+        gender_token = _normalize(gender)[:1] or "u"
+        counter_key = f"{age}-{gender_token}"
+        seq = self.participant_seq_counters.get(counter_key, 0) + 1
+        self.participant_seq_counters[counter_key] = seq
+        participant_id = build_participant_id(age, gender, seq)
         record = {
             "participant_id": participant_id,
             "age": age,
             "gender": gender,
-            "unikey": unikey,
+            "sequence": seq,
             "group_type": group_type or "",
             "created_at": _now_iso(),
         }
@@ -192,6 +195,81 @@ class MemoryStore:
             "ended_by": participant_id,
         }
 
+    def submit_client_feedback(
+        self,
+        room_id: str,
+        participant_id: str,
+        round_no: int,
+        relationship_feedback: str,
+        risk_exploration_feedback: str,
+        protective_factor_feedback: str,
+        overall_suggestion: str,
+        empathy_score: int,
+        continue_intent: str,
+        notes: str,
+    ) -> dict[str, Any]:
+        room = self.get_room(room_id)
+        if participant_id not in {room["participant_a"], room["participant_b"]}:
+            raise ValueError("participant is not in room")
+        if round_no < 1 or round_no > len(room["rounds"]):
+            raise ValueError("invalid round number")
+
+        round_plan = room["rounds"][round_no - 1]
+        expected_client_id = room["participant_a"] if round_plan["client_key"] == "A" else room["participant_b"]
+        if participant_id != expected_client_id:
+            raise ValueError("only client role can submit peer feedback")
+        if round_plan["status"] != "ended":
+            raise ValueError("round has not ended yet")
+
+        feedback_payload = {
+            "relationship_feedback": relationship_feedback,
+            "risk_exploration_feedback": risk_exploration_feedback,
+            "protective_factor_feedback": protective_factor_feedback,
+            "overall_suggestion": overall_suggestion,
+            "empathy_score": empathy_score,
+            "continue_intent": continue_intent,
+            "notes": notes,
+        }
+        record = {
+            "room_id": room_id,
+            "round_no": round_no,
+            "submitted_by": participant_id,
+            "submitted_at": _now_iso(),
+            "feedback": feedback_payload,
+        }
+        room["round_feedbacks"][round_no] = record
+        return {
+            "room_id": room_id,
+            "round_no": round_no,
+            "submitted": True,
+            "submitted_at": record["submitted_at"],
+            "feedback": feedback_payload,
+        }
+
+    def get_client_feedback(self, room_id: str, participant_id: str, round_no: int) -> dict[str, Any]:
+        room = self.get_room(room_id)
+        if participant_id not in {room["participant_a"], room["participant_b"]}:
+            raise ValueError("participant is not in room")
+        if round_no < 1 or round_no > len(room["rounds"]):
+            raise ValueError("invalid round number")
+
+        record = room["round_feedbacks"].get(round_no)
+        if not record:
+            return {
+                "room_id": room_id,
+                "round_no": round_no,
+                "submitted": False,
+                "submitted_at": None,
+                "feedback": None,
+            }
+        return {
+            "room_id": room_id,
+            "round_no": round_no,
+            "submitted": True,
+            "submitted_at": record["submitted_at"],
+            "feedback": record["feedback"],
+        }
+
     def send_message(self, room_id: str, participant_id: str, round_no: int, content: str) -> dict[str, Any]:
         room = self.get_room(room_id)
         if participant_id not in {room["participant_a"], room["participant_b"]}:
@@ -281,6 +359,7 @@ class MemoryStore:
                 },
             ],
             "round_ready": set(),
+            "round_feedbacks": {},
         }
         self.rooms[room_id] = room
         self.messages[room_id] = []

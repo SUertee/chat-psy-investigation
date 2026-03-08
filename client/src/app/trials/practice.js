@@ -813,7 +813,7 @@ function showCounselorRecordModal() {
         position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:10002;
         display:flex; align-items:center; justify-content:center; font-family:'Microsoft YaHei',sans-serif;">
         <div style="width:700px; max-width:92vw; background:#fff; border-radius:12px; padding:24px;">
-            <h3 style="margin:0 0 12px 0; color:#2c3e50;">咨询记录</h3>
+            <h3 style="margin:0 0 12px 0; color:#2c3e50;">咨询记录表</h3>
             <p style="margin:0 0 14px 0; color:#666;">请填写本轮评估结论与关键依据。</p>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                 <div>
@@ -889,7 +889,8 @@ async function submitCounselorRecord() {
     const feedbackPayload = {
         level: riskLevel,
         reason: summary,
-        chatHistory: JSON.parse(JSON.stringify(experimentData.chatHistory))
+        chatHistory: JSON.parse(JSON.stringify(experimentData.chatHistory)),
+        roundNo: roundBeforeEnd
     };
     showSupervisorFeedbackUI(feedbackPayload, practiceType, { mode: 'peer' });
 }
@@ -922,6 +923,14 @@ function showClientFeedbackModal() {
             </section>
             <section style="background:#fff; border-radius:12px; padding:14px; border:1px solid #e8ecf0;">
                 <h3 style="margin-top:0;">来访者反馈表</h3>
+                <label>维度1：建立关系（共情、尊重、被理解感）</label>
+                <textarea id="clientFbRelationship" style="width:100%; height:90px; margin:6px 0 12px 0; padding:8px;" placeholder="你觉得咨询师在建立关系方面做得如何？"></textarea>
+                <label>维度2：风险探索（是否主动询问意念/计划/意图等）</label>
+                <textarea id="clientFbRisk" style="width:100%; height:90px; margin:6px 0 12px 0; padding:8px;" placeholder="你觉得咨询师对风险探索是否充分？"></textarea>
+                <label>维度3：保护因素探索（支持系统、牵挂、应对资源）</label>
+                <textarea id="clientFbProtective" style="width:100%; height:90px; margin:6px 0 12px 0; padding:8px;" placeholder="你觉得咨询师是否探索了你的保护因素？"></textarea>
+                <label>维度4：综合建议（给咨询师的改进建议）</label>
+                <textarea id="clientFbOverall" style="width:100%; height:90px; margin:6px 0 12px 0; padding:8px;" placeholder="请给出整体建议"></textarea>
                 <label>你感到被理解的程度（1-5）</label>
                 <input id="clientFbEmpathy" type="number" min="1" max="5" style="width:100%; padding:8px; margin:6px 0 12px 0;">
                 <label>你是否愿意继续与该咨询师沟通</label>
@@ -943,13 +952,29 @@ function showClientFeedbackModal() {
 }
 
 function submitClientFeedback() {
+    const relationshipFeedback = document.getElementById('clientFbRelationship').value.trim();
+    const riskFeedback = document.getElementById('clientFbRisk').value.trim();
+    const protectiveFeedback = document.getElementById('clientFbProtective').value.trim();
+    const overallSuggestion = document.getElementById('clientFbOverall').value.trim();
     const empathy = document.getElementById('clientFbEmpathy').value;
     const cont = document.getElementById('clientFbContinue').value;
     const notes = document.getElementById('clientFbNotes').value.trim();
-    if (!empathy || !cont || !notes) {
+    if (!relationshipFeedback || !riskFeedback || !protectiveFeedback || !overallSuggestion || !empathy || !cont || !notes) {
         alert('请完整填写反馈表。');
         return;
     }
+
+    const roundNo = experimentData.controlPairing.activeRoundNo || 1;
+    const payload = {
+        round_no: roundNo,
+        relationship_feedback: relationshipFeedback,
+        risk_exploration_feedback: riskFeedback,
+        protective_factor_feedback: protectiveFeedback,
+        overall_suggestion: overallSuggestion,
+        empathy_score: Number(empathy),
+        continue_intent: cont,
+        notes
+    };
 
     if (!experimentData.responses.client_feedbacks) {
         experimentData.responses.client_feedbacks = [];
@@ -957,14 +982,18 @@ function submitClientFeedback() {
     experimentData.responses.client_feedbacks.push({
         timestamp: getCurrentTimestamp(),
         room_id: experimentData.controlPairing.roomId,
-        round_no: experimentData.controlPairing.activeRoundNo || 1,
-        empathy_score: Number(empathy),
-        continue_intent: cont,
-        notes,
+        round_no: roundNo,
+        ...payload,
         chat_history: JSON.parse(JSON.stringify(experimentData.chatHistory))
     });
 
-    const modal = document.getElementById('clientFeedbackModal');
-    if (modal) modal.remove();
-    proceedToNextStage();
+    submitPairedClientFeedback(payload)
+        .then(() => {
+            const modal = document.getElementById('clientFeedbackModal');
+            if (modal) modal.remove();
+            proceedToNextStage();
+        })
+        .catch(error => {
+            alert(`提交失败：${error.message}`);
+        });
 }

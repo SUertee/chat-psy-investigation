@@ -22,8 +22,7 @@ let experimentData = {
     participantId: '',
     participantProfile: {
         age: null,
-        gender: '',
-        unikey: ''
+        gender: ''
     },
     group: '', 
     startTime: '',

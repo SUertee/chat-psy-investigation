@@ -16,6 +16,5 @@ def register_participant_endpoint(payload: ParticipantRegisterRequest) -> dict:
     return register_participant(
         age=payload.age,
         gender=payload.gender,
-        unikey=payload.unikey,
         group_type=payload.group_type,
     )

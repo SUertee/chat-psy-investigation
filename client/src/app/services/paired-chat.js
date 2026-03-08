@@ -3,12 +3,6 @@ function getBackendBaseUrl() {
     return (EXPERIMENT_CONFIG.BACKEND_BASE_URL || '').replace(/\/$/, '');
 }
 
-function buildParticipantId(age, gender, unikey) {
-    const normalizedGender = String(gender || '').trim().toLowerCase().slice(0, 1) || 'u';
-    const normalizedUnikey = String(unikey || '').trim().toLowerCase().replace(/\s+/g, '');
-    return `P_${age}-${normalizedGender}-${normalizedUnikey}`;
-}
-
 async function backendRequest(path, options = {}) {
     const baseUrl = getBackendBaseUrl();
     if (!baseUrl) {
@@ -40,14 +34,13 @@ async function backendRequest(path, options = {}) {
 async function registerPairedParticipant() {
     const profile = experimentData.participantProfile || {};
 
-    if (!profile.age || !profile.gender || !profile.unikey) {
-        throw new Error('缺少年龄、性别或 unikey，无法注册对照组参与者。');
+    if (!profile.age || !profile.gender) {
+        throw new Error('缺少年龄或性别，无法注册对照组参与者。');
     }
 
     const payload = {
         age: profile.age,
         gender: profile.gender,
-        unikey: profile.unikey,
         group_type: experimentData.group || ''
     };
 
@@ -435,4 +428,40 @@ async function endPairedRoundByCounselor() {
     experimentData.controlPairing.currentRound = result.current_round;
     experimentData.controlPairing.roomStatus = result.room_status;
     return result;
+}
+
+async function submitPairedClientFeedback(payload) {
+    if (!experimentData.controlPairing.roomId || !experimentData.participantId) {
+        throw new Error('房间未就绪，无法提交来访者反馈。');
+    }
+    return backendRequest(
+        `/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/client-feedback`,
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                participant_id: experimentData.participantId,
+                round_no: payload.round_no,
+                relationship_feedback: payload.relationship_feedback,
+                risk_exploration_feedback: payload.risk_exploration_feedback,
+                protective_factor_feedback: payload.protective_factor_feedback,
+                overall_suggestion: payload.overall_suggestion,
+                empathy_score: payload.empathy_score,
+                continue_intent: payload.continue_intent,
+                notes: payload.notes,
+            }),
+        }
+    );
+}
+
+async function fetchPairedClientFeedback(roundNo) {
+    if (!experimentData.controlPairing.roomId || !experimentData.participantId) {
+        throw new Error('房间未就绪，无法读取来访者反馈。');
+    }
+    const query = new URLSearchParams({
+        participant_id: experimentData.participantId,
+        round_no: String(roundNo),
+    });
+    return backendRequest(
+        `/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/client-feedback?${query.toString()}`
+    );
 }

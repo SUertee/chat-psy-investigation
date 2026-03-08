@@ -55,3 +55,28 @@ class RoomEndRoundResponse(BaseModel):
     room_status: str
     ended_by: str
     already_ended: bool
+
+
+class RoomClientFeedbackRequest(BaseModel):
+    participant_id: str = Field(min_length=1, max_length=128)
+    round_no: int = Field(ge=1, le=2)
+    relationship_feedback: str = Field(min_length=1, max_length=4000)
+    risk_exploration_feedback: str = Field(min_length=1, max_length=4000)
+    protective_factor_feedback: str = Field(min_length=1, max_length=4000)
+    overall_suggestion: str = Field(min_length=1, max_length=4000)
+    empathy_score: int = Field(ge=1, le=5)
+    continue_intent: str = Field(min_length=1, max_length=32)
+    notes: str = Field(min_length=1, max_length=4000)
+
+
+class RoomClientFeedbackViewRequest(BaseModel):
+    participant_id: str = Field(min_length=1, max_length=128)
+    round_no: int = Field(ge=1, le=2)
+
+
+class RoomClientFeedbackResponse(BaseModel):
+    room_id: str
+    round_no: int
+    submitted: bool
+    submitted_at: str | None = None
+    feedback: dict | None = None

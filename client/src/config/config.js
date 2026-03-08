@@ -469,7 +469,6 @@ const QUESTIONNAIRES = {
                 questions: [
                     { id: "pt_age", type: "number", text: "年龄（填整数）", required: true },
                     { id: "pt_gender", type: "radio", text: "性别", options: ["男", "女"], required: true },
-                    { id: "pt_unikey", type: "text", text: "Unikey（用于生成配对ID）", required: true },
                     { id: "pt_training_hours", type: "number", text: "您先前的危机评估培训/学习经历是（ ）小时（没有训练经历则填0）", required: true },
                     { id: "pt_exp_hours", type: "number", text: "您先前进行危机评估的经验是（ ）小时（没有经历则填0）", required: true },
                     { id: "pt_counsel_hours", type: "number", text: "您先前进行心理咨询（包括热线心理咨询或线下一对一等咨询形式）的经验是（ ）小时（没有则填0）", required: true },

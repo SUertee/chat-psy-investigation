@@ -22,24 +22,21 @@ function setupControlChatDebugParticipant() {
     const params = new URLSearchParams(window.location.search);
     const age = parseInt(params.get('debugAge') || '24', 10);
     const gender = params.get('debugGender') || '调试';
-    const uniqueSuffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`;
-    const unikey = params.get('debugUnikey') || `debug_${uniqueSuffix}`;
 
     experimentData.group = 'control';
     experimentData.chatMode = 'paired';
     experimentData.participantProfile = {
         age,
-        gender,
-        unikey
+        gender
     };
-    experimentData.participantId = buildParticipantId(age, gender, unikey);
+    experimentData.participantId = '';
     experimentData.controlPairing.registered = false;
     experimentData.controlPairing.roomId = '';
     experimentData.controlPairing.partnerId = '';
     experimentData.controlPairing.roomStatus = '';
     experimentData.controlPairing.currentRound = 1;
     experimentData.controlPairing.assignedRole = '';
-    experimentData.controlPairing.participantKey = `${age}_${gender}_${unikey}`;
+    experimentData.controlPairing.participantKey = `${age}_${gender}`;
     experimentData.controlPairing.lastMessageId = 0;
     experimentData.timestamps.debug_mode_start = getCurrentTimestamp();
 }

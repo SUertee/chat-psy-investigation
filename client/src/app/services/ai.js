@@ -381,9 +381,45 @@ function formatFeedbackContent(text) {
     
     return html;
 }
+function renderPeerFeedbackHTML(feedback) {
+    if (!feedback) {
+        return '';
+    }
+    const continueMap = {
+        yes: '愿意',
+        unsure: '不确定',
+        no: '不愿意',
+    };
+    return `
+        <div style="display:grid; gap:12px;">
+            <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
+                <strong>维度1：建立关系</strong>
+                <p style="margin:8px 0 0 0;">${feedback.relationship_feedback || ''}</p>
+            </div>
+            <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
+                <strong>维度2：风险探索</strong>
+                <p style="margin:8px 0 0 0;">${feedback.risk_exploration_feedback || ''}</p>
+            </div>
+            <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
+                <strong>维度3：保护因素</strong>
+                <p style="margin:8px 0 0 0;">${feedback.protective_factor_feedback || ''}</p>
+            </div>
+            <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
+                <strong>维度4：综合建议</strong>
+                <p style="margin:8px 0 0 0;">${feedback.overall_suggestion || ''}</p>
+            </div>
+            <div style="background:#f5f8ff; border:1px solid #dbe6ff; border-radius:8px; padding:14px;">
+                <p style="margin:0;"><strong>被理解程度：</strong>${feedback.empathy_score || '-'}/5</p>
+                <p style="margin:8px 0 0 0;"><strong>是否愿意继续沟通：</strong>${continueMap[feedback.continue_intent] || feedback.continue_intent || '-'}</p>
+                <p style="margin:8px 0 0 0;"><strong>补充反馈：</strong>${feedback.notes || ''}</p>
+            </div>
+        </div>
+    `;
+}
+
 async function showSupervisorFeedbackUI(data, type, options = {}) {
     const mode = options.mode || 'supervisor';
-    const mainTitle = mode === 'peer' ? '📋 危机评估复盘报告' : '📋 危机评估督导复盘报告';
+    const mainTitle = mode === 'peer' ? '危机评估复盘报告' : '📋 危机评估督导复盘报告';
     const secondTitle = mode === 'peer' ? '第二部分：来访者扮演人同辈反馈' : '第二部分：AI 督导专业反馈';
     // 1. 根据你的实验顺序 (小B -> 小吴 -> 小C) 匹配档案
     let activeProfile;
@@ -455,10 +491,14 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
 
                 <div>
                     <h3 style="color:#1a73e8; border-left:5px solid #1a73e8; padding-left:15px; margin-bottom:25px;">${secondTitle}</h3>
-                    
+                    ${mode === 'peer' ? `
+                    <div style="margin:-10px 0 18px 0; color:#5f6368; font-size:14px; display:flex; justify-content:space-between; gap:12px;">
+                        <span>该页面将实时刷新来访者反馈。</span>
+                        <span id="peerFeedbackTimer">剩余查看时间 05:00</span>
+                    </div>` : ''}
                     <div id="supFeedbackLoading" style="text-align:center; padding:50px;">
                         <div style="display:inline-block; width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #1a73e8; border-radius:50%; animation:spin 1s linear infinite;"></div>
-                        <p style="color:#666; margin-top:20px;">督导正在深度阅读并分析您的对话记录...</p>
+                        <p style="color:#666; margin-top:20px;">${mode === 'peer' ? '等待来访者扮演人提交反馈...' : '督导正在深度阅读并分析您的对话记录...'}</p>
                     </div>
 
                     <div id="supFeedbackResult" style="display:none; line-height:1.8; color:#333; background:#f9f9f9; padding:25px; border-radius:10px; border:1px solid #f1f3f4; font-size:15px;">
@@ -481,23 +521,74 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
 
     document.body.insertAdjacentHTML('beforeend', overlayHTML);
 
-    // 核心修复：手动绑定点击事件，确保按钮可点
-    document.getElementById('closeFeedbackBtn').onclick = function() {
-        document.getElementById('supFeedbackOverlay').remove();
+    const cleanupAndProceed = function() {
+        if (window.peerFeedbackPollingInterval) {
+            clearInterval(window.peerFeedbackPollingInterval);
+            window.peerFeedbackPollingInterval = null;
+        }
+        if (window.peerFeedbackCountdownTimer) {
+            clearInterval(window.peerFeedbackCountdownTimer);
+            window.peerFeedbackCountdownTimer = null;
+        }
+        const overlay = document.getElementById('supFeedbackOverlay');
+        if (overlay) overlay.remove();
         proceedToNextStage();
     };
+    document.getElementById('closeFeedbackBtn').onclick = cleanupAndProceed;
+
+    if (mode === 'peer') {
+        const resultDiv = document.getElementById('supFeedbackResult');
+        const loadingDiv = document.getElementById('supFeedbackLoading');
+        const btnContainer = document.getElementById('supFeedbackBtnContainer');
+        const timerEl = document.getElementById('peerFeedbackTimer');
+        let lastSubmittedAt = '';
+
+        const roundNo = data.roundNo || (experimentData.controlPairing && experimentData.controlPairing.activeRoundNo) || 1;
+        const pollPeerFeedback = async () => {
+            try {
+                const payload = await fetchPairedClientFeedback(roundNo);
+                if (!payload || !payload.submitted) {
+                    return;
+                }
+                if (payload.submitted_at === lastSubmittedAt && resultDiv.style.display === 'block') {
+                    return;
+                }
+                lastSubmittedAt = payload.submitted_at || '';
+                loadingDiv.style.display = 'none';
+                resultDiv.innerHTML = renderPeerFeedbackHTML(payload.feedback);
+                resultDiv.style.display = 'block';
+                btnContainer.style.display = 'block';
+            } catch (error) {
+                loadingDiv.innerHTML = `<p style="color:#e74c3c;">拉取同辈反馈失败：${error.message}</p>`;
+            }
+        };
+
+        let remainingSeconds = 5 * 60;
+        window.peerFeedbackCountdownTimer = setInterval(() => {
+            remainingSeconds -= 1;
+            if (timerEl) {
+                const min = String(Math.floor(Math.max(remainingSeconds, 0) / 60)).padStart(2, '0');
+                const sec = String(Math.max(remainingSeconds, 0) % 60).padStart(2, '0');
+                timerEl.textContent = `剩余查看时间 ${min}:${sec}`;
+            }
+            if (remainingSeconds <= 0) {
+                cleanupAndProceed();
+            }
+        }, 1000);
+
+        await pollPeerFeedback();
+        window.peerFeedbackPollingInterval = setInterval(pollPeerFeedback, 2000);
+        return;
+    }
 
     try {
         const feedback = await callPracticeFeedbackAPI(data, mode);
         document.getElementById('supFeedbackLoading').style.display = 'none';
-        
-        // --- 核心修复：消除奇怪符号并美化 Markdown 排版 ---
         const resultDiv = document.getElementById('supFeedbackResult');
         resultDiv.innerHTML = feedback
             .replace(/### (.*)/g, '<h4 style="color:#1a73e8; border-bottom:1px solid #e8f0fe; padding-bottom:5px; margin-top:25px;">$1</h4>')
             .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#2c3e50; background:#f0f7ff; padding:0 4px; border-radius:3px;">$1</strong>')
             .replace(/维度(\d+)：/g, '<div style="display:inline-block; padding:2px 10px; background:#1a73e8; color:white; border-radius:4px; font-size:13px; margin-top:10px;">维度 $1</div>');
-        
         resultDiv.style.display = 'block';
         document.getElementById('supFeedbackBtnContainer').style.display = 'block';
     } catch (e) {
@@ -514,9 +605,7 @@ async function callPracticeFeedbackAPI(data, mode = 'supervisor') {
         return `${roleName}: ${m.content}`;
     }).join('\n');
 
-    const roleIntro = mode === 'peer'
-        ? '你是一名认真参与实验的“来访者扮演同辈”，请基于对话体验给出结构化反馈。'
-        : '你是一名资深的心理咨询督导，现在需要对一名“新手咨询师”的模拟练习表现进行专业点评。';
+    const roleIntro = '你是一名资深的心理咨询督导，现在需要对一名“新手咨询师”的模拟练习表现进行专业点评。';
 
     const prompt = `${roleIntro}
     
@@ -544,7 +633,7 @@ async function callPracticeFeedbackAPI(data, mode = 'supervisor') {
         body: JSON.stringify({
             model: API_CONFIG.AI_MODEL,
             messages: [
-                {role: "system", content: mode === 'peer' ? "你是一名严谨且真诚的同辈反馈者。" : "你是一名严谨的心理咨询督导专家。"}, 
+                {role: "system", content: "你是一名严谨的心理咨询督导专家。"},
                 {role: "user", content: prompt}
             ],
             temperature: 0.7

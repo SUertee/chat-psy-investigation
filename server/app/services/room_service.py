@@ -22,3 +22,33 @@ def leave_room(room_id: str, participant_id: str) -> dict:
 
 def end_round(room_id: str, participant_id: str) -> dict:
     return store.end_round(room_id, participant_id)
+
+
+def submit_client_feedback(
+    room_id: str,
+    participant_id: str,
+    round_no: int,
+    relationship_feedback: str,
+    risk_exploration_feedback: str,
+    protective_factor_feedback: str,
+    overall_suggestion: str,
+    empathy_score: int,
+    continue_intent: str,
+    notes: str,
+) -> dict:
+    return store.submit_client_feedback(
+        room_id=room_id,
+        participant_id=participant_id,
+        round_no=round_no,
+        relationship_feedback=relationship_feedback,
+        risk_exploration_feedback=risk_exploration_feedback,
+        protective_factor_feedback=protective_factor_feedback,
+        overall_suggestion=overall_suggestion,
+        empathy_score=empathy_score,
+        continue_intent=continue_intent,
+        notes=notes,
+    )
+
+
+def get_client_feedback(room_id: str, participant_id: str, round_no: int) -> dict:
+    return store.get_client_feedback(room_id=room_id, participant_id=participant_id, round_no=round_no)
