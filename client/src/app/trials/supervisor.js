@@ -45,6 +45,11 @@ function createEndTrial() {
             <p>感谢您参与本次研究！</p>
             <p>您的数据正在保存中...</p>
             <p>实验数据将自动下载到您的电脑中。</p>
+            <p style="margin-top:24px;">如果浏览器试图拦截，请点击“允许”下载文件</p>
+            <p>请把浏览器自动下载的文件发送到邮箱：
+                <a href="mailto:liyangpsy@mail.bnu.edu.cn">liyangpsy@mail.bnu.edu.cn</a>
+                （不用改文件名）
+            </p>
         `,
         choices: [],
         on_load: function() {

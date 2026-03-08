@@ -221,20 +221,91 @@ function stopPairedChatPolling() {
     }
 }
 
-function handlePairedRoomNotFound(error) {
+function isRoomNotFoundError(error) {
     const message = String((error && error.message) || '');
-    if (!/room not found/i.test(message)) {
+    return /room not found/i.test(message);
+}
+
+function isParticipantNotRegisteredError(error) {
+    const message = String((error && error.message) || '');
+    return /participant not registered|participant not found/i.test(message);
+}
+
+function getRecoveryPromptKey() {
+    if (experimentData.controlPairing.activePromptKey) {
+        return experimentData.controlPairing.activePromptKey;
+    }
+    return (experimentData.controlPairing.activeRoundNo || 1) === 2 ? 'PRACTICE_3' : 'PRACTICE_1';
+}
+
+function resetControlRoomState() {
+    experimentData.controlPairing.roomId = '';
+    experimentData.controlPairing.partnerId = '';
+    experimentData.controlPairing.roomStatus = '';
+    experimentData.controlPairing.lastMessageId = 0;
+    experimentData.controlPairing.roundEnded = false;
+}
+
+async function recoverPairedRoom(reason = 'room_lost') {
+    if (experimentData.controlPairing.recoveringRoom) {
+        return;
+    }
+
+    experimentData.controlPairing.recoveringRoom = true;
+    stopPairedChatPolling();
+    setChatComposerEnabled(false);
+    addChatMessage('system', '检测到配对连接中断，正在尝试自动恢复...');
+
+    const promptKey = getRecoveryPromptKey();
+    resetControlRoomState();
+
+    try {
+        if (reason === 'participant_missing') {
+            experimentData.controlPairing.registered = false;
+        }
+
+        try {
+            await preparePairedChatSession(promptKey);
+        } catch (error) {
+            if (!isParticipantNotRegisteredError(error)) {
+                throw error;
+            }
+            experimentData.controlPairing.registered = false;
+            await preparePairedChatSession(promptKey);
+        }
+
+        mountClientProfilePanel();
+        await refreshPairedMessages();
+        setChatComposerEnabled(true);
+        startPairedChatPolling();
+        experimentData.controlPairing.roomLostNotified = false;
+        addChatMessage('system', '配对连接已恢复，可以继续聊天。');
+    } catch (error) {
+        console.error('[PAIRED_CHAT] 自动恢复失败:', error);
+        if (!experimentData.controlPairing.roomLostNotified) {
+            experimentData.controlPairing.roomLostNotified = true;
+            alert('配对房间已失效且自动恢复失败，请刷新页面后重新进入本轮练习。');
+        }
+    } finally {
+        experimentData.controlPairing.recoveringRoom = false;
+    }
+}
+
+function handlePairedRoomNotFound(error) {
+    if (!isRoomNotFoundError(error)) {
         return false;
     }
 
-    stopPairedChatPolling();
-    setChatComposerEnabled(false);
-    experimentData.controlPairing.roomId = '';
+    recoverPairedRoom('room_lost');
+    return true;
+}
 
-    if (!experimentData.controlPairing.roomLostNotified) {
-        experimentData.controlPairing.roomLostNotified = true;
-        alert('配对房间已失效（可能是后端重启导致内存房间清空）。请重新开始配对练习。');
+function handlePairedParticipantMissing(error) {
+    if (!isParticipantNotRegisteredError(error)) {
+        return false;
     }
+
+    recoverPairedRoom('participant_missing');
     return true;
 }
 
@@ -299,11 +370,11 @@ function startPairedChatPolling() {
     const pollInterval = EXPERIMENT_CONFIG.MATCH_POLL_INTERVAL_MS || 2000;
     window.pairedChatPollingInterval = setInterval(() => {
         refreshPairedMessages().catch(error => {
-            if (handlePairedRoomNotFound(error)) return;
+            if (handlePairedRoomNotFound(error) || handlePairedParticipantMissing(error)) return;
             console.error('[PAIRED_CHAT] 拉取消息失败:', error);
         });
         monitorPairedRoundStatus().catch(error => {
-            if (handlePairedRoomNotFound(error)) return;
+            if (handlePairedRoomNotFound(error) || handlePairedParticipantMissing(error)) return;
             console.error('[PAIRED_CHAT] 拉取房间状态失败:', error);
         });
     }, pollInterval);
@@ -368,6 +439,8 @@ async function initializePairedChat(promptKey, options = {}) {
     experimentData.chatMode = 'paired';
     experimentData.chatHistory = [];
     experimentData.controlPairing.roomLostNotified = false;
+    experimentData.controlPairing.recoveringRoom = false;
+    experimentData.controlPairing.activePromptKey = promptKey;
     experimentData.controlPairing.lastMessageId = 0;
     experimentData.controlPairing.roundEnded = false;
 
@@ -395,6 +468,10 @@ async function initializePairedChat(promptKey, options = {}) {
 }
 
 async function sendPairedChatMessageFromInput() {
+    if (experimentData.controlPairing.recoveringRoom) {
+        return;
+    }
+
     const input = document.getElementById('chatInput');
     const message = input ? input.value.trim() : '';
     if (!message) {
@@ -414,15 +491,23 @@ async function sendPairedChatMessageFromInput() {
         input.value = '';
     }
 
-    const sent = await backendRequest('/chat/send', {
-        method: 'POST',
-        body: JSON.stringify({
-            room_id: experimentData.controlPairing.roomId,
-            participant_id: experimentData.participantId,
-            round_no: roundNo,
-            content: message
-        })
-    });
+    let sent;
+    try {
+        sent = await backendRequest('/chat/send', {
+            method: 'POST',
+            body: JSON.stringify({
+                room_id: experimentData.controlPairing.roomId,
+                participant_id: experimentData.participantId,
+                round_no: roundNo,
+                content: message
+            })
+        });
+    } catch (error) {
+        if (handlePairedRoomNotFound(error) || handlePairedParticipantMissing(error)) {
+            return;
+        }
+        throw error;
+    }
 
     experimentData.controlPairing.lastMessageId = Math.max(
         experimentData.controlPairing.lastMessageId || 0,

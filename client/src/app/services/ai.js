@@ -451,9 +451,9 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
         title: "最后一次练习 (后测)：个案复盘",
         level: "中风险",
         identity: "17岁，高二女生，长期遭受校园霸凌",
-        situation: "在校被起侮辱性外号并被撞倒，父母不理解，目前躲在房间极度难受。",
+        situation: "因为抑郁症休学后刚刚复学，就在校被起侮辱性外号并被撞倒，父母不理解，目前躲在家里的房间极度难受。",
         stress: `<ul><li><strong>校园霸凌：</strong>长期被孤立、造谣，被取侮辱性外号。</li><li><strong>家庭：</strong>父母归结为“爱惹事”，缺乏支持。</li><li><strong>心理：</strong>曾确诊抑郁症并休学，存在自伤行为。</li></ul>`,
-        crisisDetail: `<div style="background:#fffaf0; padding:18px; border-radius:10px; border:1px solid #fbd38d; line-height:1.7; color:#2d3748; font-size:14px;"><p style="margin: 0 0 10px 0;"><strong>🟠 自杀想法较强烈（8/10）：</strong>认为生活是折磨，自杀是唯一出路。</p><p style="margin: 0 0 10px 0;"><strong>📍 有模糊自杀计划：</strong>想吞食大量药物，但无具体实施时间或地点计划。</p><p style="margin: 0 0 10px 0;"><strong>🎯 自杀意图极低（1/10）：</strong>虽然痛苦，但目前没有明确的实施意图。</p><p style="margin: 0 0 10px 0;"><strong>📦 准备行为：</strong>曾攒药被母亲发现藏起，目前无自杀准备行为。</p><p style="margin: 0 0 10px 0;"><strong>⚠️ 风险因素：</strong>非自杀性自伤（NSSI）；抑郁症病史；持续霸凌。</p><p style="margin: 0;"><strong>🛡️ 保护因素：</strong>坚持服药复诊；放心不下小猫；答应过父母不自杀。</p></div>`
+        crisisDetail: `<div style="background:#fffaf0; padding:18px; border-radius:10px; border:1px solid #fbd38d; line-height:1.7; color:#2d3748; font-size:14px;"><p style="margin: 0 0 10px 0;"><strong>🟠 自杀想法较强烈（8/10）：</strong>认为目前的生活是折磨，自己找不到出路。</p><p style="margin: 0 0 10px 0;"><strong>📍 有明确自杀计划：</strong>想等家里没人的时候通过割腕自杀。</p><p style="margin: 0 0 10px 0;"><strong>🎯 自杀实施意图较低（3/10）：</strong>还没有完全下定决心自杀，对于未来仍有微弱期待，没有任何要立刻行动的想法。</p><p style="margin: 0 0 10px 0;"><strong>📦 准备行为：</strong>近期无任何收集、准备自杀工具的行为。</p><p style="margin: 0 0 10px 0;"><strong>⚠️ 风险因素：</strong>非自杀性自伤史；抑郁症病史；持续遭受霸凌。</p><p style="margin: 0;"><strong>🛡️ 保护因素：</strong>父母带着她定期服药复诊；放心不下家里的小猫；高中只剩一年了，毕业后就可以离开这些霸凌自己的人。</p></div>`
     };
 
     // 2. 根据调用时传入的 type 自动切换

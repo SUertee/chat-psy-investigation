@@ -31,12 +31,27 @@ function createVideoTrial() {
         type: jsPsychHtmlButtonResponse,
         stimulus: `
             <div class="video-container">
-                <video width="640" height="360" id="trainingVideo" autoplay
-                        oncontextmenu="return false;" 
-                        disablepictureinpicture>
-                    <source src="${EXPERIMENT_CONFIG.TRAINING_VIDEO_PATH}" type="video/mp4">
-                    您的浏览器不支持视频播放。
-                </video>
+                <div style="position: relative; width: 640px; height: 360px; margin: 0 auto;">
+                    <video width="640" height="360" id="trainingVideo"
+                            oncontextmenu="return false;" 
+                            disablepictureinpicture>
+                        <source src="${EXPERIMENT_CONFIG.TRAINING_VIDEO_PATH}" type="video/mp4">
+                        您的浏览器不支持视频播放。
+                    </video>
+                    <button id="videoStartOverlay" type="button" style="
+                        position: absolute;
+                        left: 50%;
+                        top: 50%;
+                        transform: translate(-50%, -50%);
+                        padding: 12px 22px;
+                        border: none;
+                        border-radius: 999px;
+                        background: rgba(0, 0, 0, 0.68);
+                        color: #fff;
+                        font-size: 16px;
+                        cursor: pointer;
+                    ">点击开始播放</button>
+                </div>
             </div>
             ${continueButtonHTML}
         `,
@@ -52,15 +67,28 @@ function createVideoTrial() {
             const skipButton = document.getElementById('skipVideoButton');
             if (skipButton) {
                 skipButton.disabled = false;
-            }            
+            }
             // 确保跳过按钮在加载后立即可用 (DEBUG)
-            skipButton.disabled = false;
+            if (skipButton) {
+                skipButton.disabled = false;
+            }
+
+            const startOverlay = document.getElementById('videoStartOverlay');
+            const startPlayback = () => {
+                video.play().then(() => {
+                    if (startOverlay) {
+                        startOverlay.style.display = 'none';
+                    }
+                }).catch(e => {
+                    console.warn("Video play blocked:", e);
+                });
+            };
+            if (startOverlay) {
+                startOverlay.onclick = startPlayback;
+            }
             
             // 播放视频并禁用用户操作
             video.onloadeddata = function() {
-                // 尝试播放（浏览器可能限制，但我们会继续设置监听器）
-                video.play().catch(e => { console.warn("Autoplay blocked, user intervention may be required."); });
-                
                 // 禁用进度条拖动，这需要通过JS实现
                 video.addEventListener('seeking', function() {
                     // 如果用户尝试拖动到未播放过的时间点，则强制回到当前已播放时间
@@ -77,7 +105,9 @@ function createVideoTrial() {
                 finishButton.disabled = false; // 视频播放完毕后，启用正式继续按钮
                 finishButton.textContent = '视频播放完毕，继续实验';
                 // 播放结束，可以禁用 DEBUG 按钮
-                skipButton.style.display = 'none'; 
+                if (skipButton) {
+                    skipButton.style.display = 'none';
+                }
             };
             
             // 确保视频从头开始

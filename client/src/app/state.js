@@ -56,7 +56,10 @@ let experimentData = {
         roundEnded: false,
         activeRoundNo: 1,
         firstRoundRole: '',
-        secondRoundRole: ''
+        secondRoundRole: '',
+        roomLostNotified: false,
+        recoveringRoom: false,
+        activePromptKey: ''
     },
     chatMode: 'ai',
     crisisAssessment: {},

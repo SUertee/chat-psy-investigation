@@ -38,12 +38,27 @@ function showTrainingOnly() {
     trainingDiv.innerHTML = `
         <div class="video-container">
             <h2>您选择不同意，但仍可观看培训视频</h2>
-            <video id="trainingVideoOnly" width="640" height="360" autoplay 
-                   oncontextmenu="return false;" 
-                   disablepictureinpicture>
-                <source src="${EXPERIMENT_CONFIG.TRAINING_VIDEO_PATH}" type="video/mp4">
-                您的浏览器不支持视频播放。
-            </video>
+            <div style="position: relative; width: 640px; height: 360px; margin: 0 auto;">
+                <video id="trainingVideoOnly" width="640" height="360"
+                       oncontextmenu="return false;" 
+                       disablepictureinpicture>
+                    <source src="${EXPERIMENT_CONFIG.TRAINING_VIDEO_PATH}" type="video/mp4">
+                    您的浏览器不支持视频播放。
+                </video>
+                <button id="trainingOnlyStartOverlay" type="button" style="
+                    position: absolute;
+                    left: 50%;
+                    top: 50%;
+                    transform: translate(-50%, -50%);
+                    padding: 12px 22px;
+                    border: none;
+                    border-radius: 999px;
+                    background: rgba(0, 0, 0, 0.68);
+                    color: #fff;
+                    font-size: 16px;
+                    cursor: pointer;
+                ">点击开始播放</button>
+            </div>
         </div>
         <div style="text-align: center; margin-top: 20px;">
              <p id="exitMessage">请耐心观看视频，结束后将自动关闭页面...</p>
@@ -56,9 +71,19 @@ function showTrainingOnly() {
     // JS逻辑：禁用进度条拖动和监听播放结束
     const video = document.getElementById('trainingVideoOnly');
     const exitMessage = document.getElementById('exitMessage');
+    const startOverlay = document.getElementById('trainingOnlyStartOverlay');
+
+    if (startOverlay) {
+        startOverlay.onclick = function() {
+            video.play().then(() => {
+                startOverlay.style.display = 'none';
+            }).catch((error) => {
+                console.warn('Video play blocked:', error);
+            });
+        };
+    }
 
     video.onloadeddata = function() {
-        video.play();
         video.addEventListener('seeking', function() {
             if (video.currentTime > video.currentPlayTime + 5) {
                 video.currentTime = video.currentPlayTime;

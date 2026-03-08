@@ -132,6 +132,7 @@ function createProcedureInstructionTrial() {
                         <li>整个实验大约耗时 <strong>60分钟</strong>，过程中请保持环境安静；</li>
                         <li>如果在实验过程中有任何疑问或技术问题，请<strong>随时举手向主试示意</strong>；</li>
                         <li>实验期间请务必<strong>关注自己的电脑屏幕</strong>，请勿与其他参与者交流或观看他人屏幕。</li>
+                        <li><strong>推荐使用 Edge 或 Chrome 浏览器</strong>；请勿使用微信内置浏览器或 Safari。实验时请将页面全屏打开，过程中不要切屏。</li>
                         <li>实验最后会弹出文件下载按钮，请务必选择<strong>保存</strong>。</li>
 
                     </ul>

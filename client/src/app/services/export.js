@@ -24,6 +24,19 @@ function saveData() {
             return String(value ?? '');
         }
     };
+    const buildDurationMap = (timestamps) => {
+        const durationMap = {};
+        Object.keys(timestamps || {}).forEach((key) => {
+            if (!key.endsWith('_start')) return;
+            const baseKey = key.slice(0, -6);
+            const endKey = `${baseKey}_end`;
+            const duration = calcDurationSeconds(timestamps[key], timestamps[endKey]);
+            if (duration !== '') {
+                durationMap[`${baseKey}_duration_sec`] = duration;
+            }
+        });
+        return durationMap;
+    };
 
     // ========== 1) 事件长表（便于审计） ==========
     const eventRows = [];
@@ -158,6 +171,63 @@ function saveData() {
         full_control_pairing_json: safeStringify(control)
     };
 
+    const jsPsychRawData = (() => {
+        try {
+            if (typeof jsPsych !== 'undefined' && jsPsych && jsPsych.data && jsPsych.data.get) {
+                return jsPsych.data.get().values();
+            }
+        } catch (error) {
+            console.warn('读取 jsPsych 原始数据失败:', error);
+        }
+        return [];
+    })();
+
+    const resultSnapshot = {
+        schema_version: 'v1',
+        saved_at: now,
+        participant_id: experimentData.participantId || '',
+        file_name: `participant_${experimentData.participantId || 'unknown'}_${now.replace(/[^\d]/g, '').slice(0, 14)}.json`,
+        meta: {
+            group: experimentData.group || '',
+            age: experimentData.participantProfile?.age ?? null,
+            gender: experimentData.participantProfile?.gender ?? '',
+            split_half_order: experimentData.splitHalfOrder || '',
+            user_agent: navigator.userAgent || '',
+            language: navigator.language || '',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+            screen: {
+                width: window.screen ? window.screen.width : null,
+                height: window.screen ? window.screen.height : null
+            },
+            viewport: {
+                width: window.innerWidth || null,
+                height: window.innerHeight || null
+            }
+        },
+        timestamps: ts,
+        durations: buildDurationMap(ts),
+        responses,
+        chat_records: {
+            ai_practice_chats: experimentData.allPracticeChats || {},
+            paired_chat_history: experimentData.pairedChatHistory || [],
+            tutor_chat_history: experimentData.tutorChatHistory || [],
+            current_chat_history: experimentData.chatHistory || []
+        },
+        risk_assessment: {
+            ai_practice_assessments: responses.practice_assessments || [],
+            control_counselor_records: responses.counselor_records || [],
+            control_client_feedbacks: responses.client_feedbacks || [],
+            crisis_assessment: experimentData.crisisAssessment || {}
+        },
+        ai_feedback: {
+            supervisor_feedback: experimentData.supervisorFeedback || ''
+        },
+        control_pairing: control,
+        event_log_rows: eventRows,
+        participant_wide_row: wideRow,
+        jspsych_raw_trials: jsPsychRawData
+    };
+
     // ========== 3) 导出 ==========
     const workbook = XLSX.utils.book_new();
 
@@ -180,4 +250,5 @@ function saveData() {
     link.click();
 
     uploadToServer(blob, fileName);
+    uploadResultSnapshot(resultSnapshot);
 }
