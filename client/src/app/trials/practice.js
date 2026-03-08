@@ -195,27 +195,24 @@ function finishVideo() {
 
 // ===== 练习/观摩阶段 =====
 
-function createPracticePromptTrial(sessionNum) {
+function createPracticePromptTrial(sessionNum, customTitle = '') {
     // 这里的数组索引需要注意：sessionNum 为 1 是练习一，为 3 是练习三
-    const titles = { 1: "练习一", 3: "练习二" }; // 你可以自定义显示名称
+    const titles = { 1: "练习一", 3: "练习二", 4: "练习3" }; // 你可以自定义显示名称
     
     return {
         type: jsPsychHtmlButtonResponse,
         stimulus: function() {
-            const title = titles[sessionNum] || "模拟练习";
-            let actionText = experimentData.group === 'control' ? "选择" : "输入";
-
+            const title = customTitle || titles[sessionNum] || "模拟练习";
             // 修改这里：让练习一(1)和练习三(3)都显示这段指导语
             let goalDescription = "";
-            if (sessionNum === 1 || sessionNum === 3) {
+            if (sessionNum === 1 || sessionNum === 3 || sessionNum === 4) {
                 goalDescription = `
                     <div style="margin-top: 20px; padding: 15px; background-color: #fff9db; border-radius: 6px; border: 1px solid #f1c40f; font-size: 0.95em; color: #444; line-height: 1.6;">
                         <strong style="color: #d35400; font-size: 1.1em;">🎯 本次练习目标：建立关系 + 风险评估</strong><br>
                         <ul style="margin-top: 10px; padding-left: 20px;">
-                            <li>请注意：本阶段<strong>不涉及危机干预</strong>。</li>
-                            <li><strong>结束方式：</strong>当您掌握足够信息进行风险评估后，请点击右上角的 <span style="color: #e91e63; font-weight: bold;">粉红色“结束练习”按钮</span>。</li>
-                            <li><strong style="color: #c0392b;">⚠️ 关键提示：</strong>点击该按钮后将<strong>无法返回</strong>对话。</li>
-                            <li><strong>限时提醒：</strong>对话限时 10 分钟，若未手动结束，系统将自动跳转。</li>
+                            <li>你将进入一段实时文字会话，请根据界面中的角色提示完成互动。</li>
+                            <li>请使用自然、连贯的对话风格。</li>
+                            <li><strong>限时提醒：</strong>对话限时 10 分钟；结束规则以会话内提示为准。</li>
                         </ul>
                     </div>
                 `;
@@ -225,8 +222,7 @@ function createPracticePromptTrial(sessionNum) {
                 <div style="max-width: 700px; margin: 0 auto; font-family: 'Microsoft YaHei', sans-serif;">
                     <h2 style="color: #333; margin-bottom: 30px;">${title}</h2>
                     <div style="background-color: #fff; padding: 40px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); text-align: left; border: 1px solid #ebebeb; line-height: 1.8; color: #444;">
-                        <p>🧑‍💼 <strong>角色设定：</strong>你是一名进行线上文字支持的朋辈咨询师。</p>
-                        <p>📩 你收到了一条新信息，请仔细<strong>${actionText}</strong>你的回应。</p>
+                        <p>📩 你即将进入本轮练习，请先阅读以下提示。</p>
                         ${goalDescription}
                     </div>
                 </div>`;
@@ -294,65 +290,255 @@ function createPracticeTrial() {
 
 
 // 由于 jsPsych 的 timeline 是按顺序执行的，我们将使用 conditional_function 来实现逻辑分支。
+function getPracticeRoundNo(promptKey) {
+    if (promptKey === 'PRACTICE_3') return 2;
+    if (promptKey === 'SECOND_CLIENT') return 3;
+    return 1;
+}
+
+function createConnectionBriefCard() {
+    return `
+        <div style="max-width: 760px; margin: 0 auto; font-family: 'Microsoft YaHei', sans-serif;">
+            <h2 style="color: #333; margin-bottom: 24px;">会话准备中</h2>
+            <div style="background-color: #fff; padding: 28px 24px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); text-align: left; border: 1px solid #ebebeb; line-height: 1.8; color: #444;">
+                <div id="connectionLoadingBlock">
+                    <p style="margin: 0;"><strong>正在连接……，请稍候...</strong></p>
+                </div>
+                <div id="connectionSuccessBlock" style="display:none; margin-top: 14px;"></div>
+            </div>
+            <div style="text-align: center; margin-top: 24px;">
+                <button class="jspsych-btn" id="connectionContinueBtn" disabled style="padding: 10px 35px; background-color: #bdbdbd; color: #fff; border: none; border-radius: 4px; cursor: not-allowed;">
+                    请稍候...
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function getCounselorInstructionHTML(roundNo, counterpartLine) {
+    return `
+        <p style="margin: 0;"><strong>连接成功！</strong></p>
+        <p style="margin: 6px 0 0 0;">当前轮次：第 ${roundNo} 轮</p>
+        <p style="margin: 2px 0 0 0;">会话背景：你当前进入的是「安心对话」线上匿名心理支持平台。</p>
+        <p style="margin: 2px 0 0 0;">你的角色：咨询师</p>
+        <p style="margin: 2px 0 0 0;">${counterpartLine}</p>
+        <p style="margin: 2px 0 0 0;">本轮任务：扮演咨询师，和来访者进行角色扮演，练习建立关系 + 风险评估技能，并在对话结束后填写风险评估表</p>
+        <ul style="margin-top: 10px; padding-left: 20px;">
+            <li>请注意：本阶段不涉及危机干预。</li>
+            <li><strong>结束方式：</strong>当您掌握足够信息进行风险评估后，请点击右侧的 <span style="color: #e91e63; font-weight: bold;">粉红色“我已完成风险评估，结束此阶段”按钮</span>。</li>
+            <li><strong style="color: #c0392b;">⚠️ 关键提示：</strong>点击该按钮后将<strong>无法返回</strong>对话。</li>
+            <li><strong>限时提醒：</strong>对话限时 10 分钟，若未手动结束，系统将自动跳转。</li>
+        </ul>
+    `;
+}
+
+function createExperimentalConnectionBriefTrial(promptKey) {
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: createConnectionBriefCard,
+        choices: [],
+        on_load: async function() {
+            const continueBtn = document.getElementById('connectionContinueBtn');
+            const successBlock = document.getElementById('connectionSuccessBlock');
+            const roundNo = getPracticeRoundNo(promptKey);
+
+            continueBtn.onclick = function() {
+                jsPsych.finishTrial();
+            };
+
+            await new Promise(resolve => setTimeout(resolve, 700));
+            successBlock.innerHTML = getCounselorInstructionHTML(roundNo, '来访者：由AI扮演');
+            successBlock.style.display = 'block';
+
+            continueBtn.disabled = false;
+            continueBtn.textContent = '开始会话';
+            continueBtn.style.backgroundColor = '#07c160';
+            continueBtn.style.cursor = 'pointer';
+        }
+    };
+}
+
+function createControlConnectionBriefTrial(promptKey) {
+    return {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: createConnectionBriefCard,
+        choices: [],
+        on_load: async function() {
+            const loadingBlock = document.getElementById('connectionLoadingBlock');
+            const continueBtn = document.getElementById('connectionContinueBtn');
+            const successBlock = document.getElementById('connectionSuccessBlock');
+
+            loadingBlock.innerHTML = '<p style="margin: 0;"><strong>正在为您进行配对……，请稍候...</strong></p>';
+            if (continueBtn) {
+                continueBtn.style.display = 'none';
+            }
+
+            const beginSyncedEnterCountdown = (syncResult) => {
+                const countdownNode = document.getElementById('syncedEnterCountdown');
+                if (!countdownNode) {
+                    jsPsych.finishTrial();
+                    return;
+                }
+
+                const startAtMs = Date.parse(syncResult.start_at);
+                const serverNowMs = Date.parse(syncResult.server_now);
+                const clientNowMs = Date.now();
+                const clockOffsetMs = serverNowMs - clientNowMs;
+                let timer = null;
+
+                const tick = () => {
+                    const nowMs = Date.now() + clockOffsetMs;
+                    const remainMs = Math.max(0, startAtMs - nowMs);
+                    const remainSeconds = Math.ceil(remainMs / 1000);
+                    countdownNode.textContent = `倒计时 ${remainSeconds} 秒，结束后将自动进入对话...`;
+                    if (remainMs <= 0) {
+                        if (timer) {
+                            clearInterval(timer);
+                        }
+                        jsPsych.finishTrial();
+                    }
+                };
+
+                tick();
+                timer = setInterval(tick, 200);
+            };
+
+            const connectAndRender = async () => {
+                successBlock.style.display = 'none';
+
+                try {
+                    const pairing = await preparePairedChatSession(promptKey);
+                    const { roundNo, isCounselor } = pairing;
+                    if (isCounselor) {
+                        successBlock.innerHTML = getCounselorInstructionHTML(roundNo, '来访者：由真人搭档扮演');
+                    } else {
+                        successBlock.innerHTML = `
+                            <p style="margin: 0;"><strong>连接成功！</strong></p>
+                            <p style="margin: 6px 0 0 0;">当前轮次：第 ${roundNo} 轮</p>
+                            <p style="margin: 2px 0 0 0;">会话背景：你当前进入的是「安心对话」线上匿名心理支持平台。</p>
+                            <p style="margin: 2px 0 0 0;">你的角色：来访者</p>
+                            <p style="margin: 2px 0 0 0;">咨询师：由真人搭档扮演</p>
+                            <p style="margin: 2px 0 0 0;">你的开场白“你好… 我觉得好难受，能跟你聊聊吗……”已由系统自动发送。</p>
+                            <p style="margin: 2px 0 0 0;">本轮任务：按照屏幕右侧的来访者人设进行角色扮演，让咨询师练习刚刚学习的技能，并在练习结束后，根据提示填写反馈表。</p>
+                            <ul style="margin-top: 10px; padding-left: 20px;">
+                                <li><strong>限时提醒：</strong>对话限时 10 分钟，咨询师可能在完成风险评估后主动结束对话，或超时后系统自动结束对话，随后跳转到反馈填写页面。</li>
+                            </ul>
+                        `;
+                    }
+
+                    successBlock.style.display = 'block';
+
+                    const syncTextNode = document.createElement('p');
+                    syncTextNode.id = 'syncedEnterCountdown';
+                    syncTextNode.style.margin = '8px 0 0 0';
+                    syncTextNode.style.color = '#d35400';
+                    syncTextNode.style.fontWeight = 'bold';
+                    syncTextNode.textContent = '正在等待两位参与者就绪后同步进入会话...';
+                    successBlock.appendChild(syncTextNode);
+
+                    const maxAttempts = 120;
+                    const pollInterval = 500;
+                    let syncResult = null;
+                    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                        syncResult = await syncPairedChatStart(roundNo);
+                        if (syncResult.status === 'ready' && syncResult.start_at && syncResult.server_now) {
+                            break;
+                        }
+                        syncTextNode.textContent = '已配对成功，正在等待另一位参与者进入准备页...';
+                        await new Promise(resolve => setTimeout(resolve, pollInterval));
+                    }
+
+                    if (!syncResult || syncResult.status !== 'ready' || !syncResult.start_at || !syncResult.server_now) {
+                        throw new Error('同步进入会话超时，请重试。');
+                    }
+
+                    beginSyncedEnterCountdown(syncResult);
+                } catch (error) {
+                    console.error('[PAIRED_CHAT] 配对预连接失败:', error);
+                    successBlock.innerHTML = `<p style="margin: 0; color: #c0392b;"><strong>配对失败：</strong>${error.message}</p>`;
+                    successBlock.style.display = 'block';
+                    if (continueBtn) {
+                        continueBtn.style.display = 'inline-block';
+                        continueBtn.disabled = false;
+                        continueBtn.textContent = '重试连接';
+                        continueBtn.style.backgroundColor = '#e67e22';
+                        continueBtn.style.cursor = 'pointer';
+                        continueBtn.onclick = connectAndRender;
+                    }
+                }
+            };
+
+            connectAndRender();
+        }
+    };
+}
 
 function createPracticeTimeline(promptKey, startNodeId) {
     // --- 1. 实验组分支：自由 AI 对话 ---
     const experimentalTrial = {
-        timeline: [{
-            type: jsPsychHtmlButtonResponse,
-            stimulus: createChatInterface,
-            choices: [],
-            on_load: function() {
-                experimentData.chatMode = 'ai';
-                initializeChat(promptKey); // 使用 AI 角色
-                experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
-                startCountdown();   // 启动倒计时
-                showFinishButton(); // 显示玫粉色按钮
-            },
-            on_finish: function() {
-                hideCountdownAndButton();
-                if (window.countdownTimer) {
-                    clearInterval(window.countdownTimer);
-                    window.countdownTimer = null;
-                }
-                hideCountdown();
-                hideFinishButton();
-                if (experimentData.chatHistory.length > 0) {
-                    experimentData.allPracticeChats[promptKey] = JSON.parse(JSON.stringify(experimentData.chatHistory));
+        timeline: [
+            createExperimentalConnectionBriefTrial(promptKey),
+            {
+                type: jsPsychHtmlButtonResponse,
+                stimulus: createChatInterface,
+                choices: [],
+                on_load: function() {
+                    experimentData.chatMode = 'ai';
+                    initializeChat(promptKey); // 使用 AI 角色
+                    experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
+                    startCountdown();   // 启动倒计时
+                    showFinishButton(); // 显示玫粉色按钮
+                },
+                on_finish: function() {
+                    hideCountdownAndButton();
+                    if (window.countdownTimer) {
+                        clearInterval(window.countdownTimer);
+                        window.countdownTimer = null;
+                    }
+                    hideCountdown();
+                    hideFinishButton();
+                    experimentData.timestamps[promptKey + '_end'] = getCurrentTimestamp();
+                    if (experimentData.chatHistory.length > 0) {
+                        experimentData.allPracticeChats[promptKey] = JSON.parse(JSON.stringify(experimentData.chatHistory));
+                    }
                 }
             }
-        }],
+        ],
         conditional_function: function() { return experimentData.group === 'experimental'; }
     };
 
     // --- 2. 对照组分支：真人配对聊天室（复用相同 UI） ---
     const controlTrial = {
-        timeline: [{
-            type: jsPsychHtmlButtonResponse,
-            stimulus: createChatInterface,
-            choices: [],
-            on_load: function() {
-                experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
+        timeline: [
+            createControlConnectionBriefTrial(promptKey),
+            {
+                type: jsPsychHtmlButtonResponse,
+                stimulus: createChatInterface,
+                choices: [],
+                on_load: function() {
+                    experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
 
-                initializePairedChat(promptKey)
-                    .then(() => {
-                        startCountdown();
-                        showFinishButton();
-                    })
-                    .catch(error => {
-                        console.error('[PAIRED_CHAT] 初始化失败:', error);
-                        alert(`对照组配对失败：${error.message}`);
-                        jsPsych.finishTrial();
-                    });
-            },
-            on_finish: function() {
-                if (experimentData.chatHistory.length > 0) {
-                    experimentData.allPracticeChats[promptKey] = JSON.parse(JSON.stringify(experimentData.chatHistory));
+                    initializePairedChat(promptKey, { prepared: true })
+                        .then(() => {
+                            startCountdown();
+                            showFinishButton();
+                        })
+                        .catch(error => {
+                            console.error('[PAIRED_CHAT] 初始化失败:', error);
+                            alert(`对照组配对失败：${error.message}`);
+                            jsPsych.finishTrial();
+                        });
+                },
+                on_finish: function() {
+                    experimentData.timestamps[promptKey + '_end'] = getCurrentTimestamp();
+                    if (experimentData.chatHistory.length > 0) {
+                        experimentData.allPracticeChats[promptKey] = JSON.parse(JSON.stringify(experimentData.chatHistory));
+                    }
+                    hideCountdown();
+                    hideFinishButton();
                 }
-                hideCountdown();
-                hideFinishButton();
             }
-        }],
+        ],
         conditional_function: function() {
             return experimentData.group === 'control';
         }
@@ -479,12 +665,20 @@ function showFinishButton() {
         return;
     }
     if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.textContent = '我已完成风险评估，结束此阶段';
         btn.style.display = 'block';
     } else {
         // 如果找不到按钮，尝试在 500ms 后重新查找一次
         setTimeout(() => {
             const retryBtn = document.getElementById('finishButton');
-            if (retryBtn) retryBtn.style.display = 'block';
+            if (retryBtn) {
+                retryBtn.disabled = false;
+                retryBtn.style.opacity = '1';
+                retryBtn.textContent = '我已完成风险评估，结束此阶段';
+                retryBtn.style.display = 'block';
+            }
         }, 500);
     }
 }
@@ -503,7 +697,28 @@ function finishStage() {
             if (!confirmed) {
                 return;
             }
-            showCounselorRecordModal();
+            const finishBtn = document.getElementById('finishButton');
+            if (finishBtn) {
+                finishBtn.disabled = true;
+                finishBtn.style.opacity = '0.6';
+                finishBtn.textContent = '正在结束本轮...';
+            }
+            setChatComposerEnabled(false);
+
+            endPairedRoundByCounselor()
+                .then(() => {
+                    hideFinishButton();
+                    showCounselorRecordModal();
+                })
+                .catch(error => {
+                    if (finishBtn) {
+                        finishBtn.disabled = false;
+                        finishBtn.style.opacity = '1';
+                        finishBtn.textContent = '我已完成风险评估，结束此阶段';
+                    }
+                    setChatComposerEnabled(true);
+                    alert(`结束失败：${error.message}`);
+                });
             return;
         }
         alert('当前由咨询师结束本轮，请等待对方提交。');
@@ -534,20 +749,24 @@ function proceedToNextStage() {
 
 // ===== 后测问卷 =====
 function createPosttestQuestionnaire() {
-    return createQuestionnaireTrial('posttest', QUESTIONNAIRES.posttest);
+    const posttestConfig = (typeof getCounterbalancedQuestionnaireConfig === 'function')
+        ? getCounterbalancedQuestionnaireConfig('posttest')
+        : QUESTIONNAIRES.posttest;
+    return createQuestionnaireTrial('posttest', posttestConfig);
 }
 
 // ===== 二次练习提示 =====
 function createSecondPracticePromptTrial() {
-    return {
-        type: jsPsychHtmlButtonResponse,
-        stimulus: '<h2>接下来再次进入练习阶段</h2><p>请继续与AI虚拟来访者进行对话练习。</p>',
-        choices: ['开始'],
-        on_load: function() {
-            updateProgress(EXPERIMENT_CONFIG.PROGRESS_STAGES.practice2);
-            experimentData.timestamps.second_practice_prompt = getCurrentTimestamp();
+    const promptTrial = createPracticePromptTrial(4, '练习3');
+    const originalOnLoad = promptTrial.on_load;
+    promptTrial.on_load = function() {
+        if (typeof originalOnLoad === 'function') {
+            originalOnLoad();
         }
+        updateProgress(EXPERIMENT_CONFIG.PROGRESS_STAGES.practice2);
+        experimentData.timestamps.second_practice_prompt = getCurrentTimestamp();
     };
+    return promptTrial;
 }
 
 // ===== 第二次练习 =====
@@ -555,44 +774,44 @@ function createSecondPracticePromptTrial() {
 
 function createSecondPracticeTrial() {
     return {
-        type: jsPsychHtmlButtonResponse,
-        stimulus: function() {
-            return createChatInterface(); // 调用统一的聊天界面模板
-        },
-        choices: [],
-        on_load: function() {
-            // 1. 记录时间戳
-            experimentData.timestamps.second_practice_start = getCurrentTimestamp();
-            // 关键：第三轮统一走 AI 对话，不再沿用配对聊天状态
-            experimentData.chatMode = 'ai';
-            if (typeof stopPairedChatPolling === 'function') {
-                stopPairedChatPolling();
+        timeline: [
+            createExperimentalConnectionBriefTrial('SECOND_CLIENT'),
+            {
+                type: jsPsychHtmlButtonResponse,
+                stimulus: function() {
+                    return createChatInterface();
+                },
+                choices: [],
+                on_load: function() {
+                    experimentData.timestamps.second_practice_start = getCurrentTimestamp();
+                    experimentData.chatMode = 'ai';
+                    if (typeof stopPairedChatPolling === 'function') {
+                        stopPairedChatPolling();
+                    }
+
+                    initializeChat('SECOND_CLIENT');
+                    if (typeof startCountdown === 'function') {
+                        startCountdown();
+                    }
+                    if (typeof showFinishButton === 'function') {
+                        showFinishButton();
+                    }
+                },
+                on_finish: function() {
+                    hideCountdownAndButton();
+                    if (window.countdownTimer) {
+                        clearInterval(window.countdownTimer);
+                        window.countdownTimer = null;
+                    }
+                    hideCountdown();
+                    hideFinishButton();
+                    experimentData.timestamps.second_practice_end = getCurrentTimestamp();
+                    const snapshot = JSON.parse(JSON.stringify(experimentData.chatHistory));
+                    experimentData.allPracticeChats['SECOND_CLIENT'] = snapshot;
+                    experimentData.allPracticeChats['practice_2_retry'] = snapshot;
+                }
             }
-            
-            // 2. 初始化 AI 角色 (对照组和实验组统一使用 SECOND_CLIENT)
-            initializeChat('SECOND_CLIENT'); 
-            
-            // 3. 【核心修复】显式启动 UI 元素
-            if (typeof startCountdown === 'function') {
-                startCountdown(); // 启动 10 分钟倒计时
-            }
-            if (typeof showFinishButton === 'function') {
-                showFinishButton(); // 显示玫粉色结束按钮
-            }
-        },
-        on_finish: function() {
-            // 4. 清理 UI 状态
-            hideCountdownAndButton();
-            if (window.countdownTimer) {
-                clearInterval(window.countdownTimer);
-                window.countdownTimer = null;
-            }
-            hideCountdown();
-            hideFinishButton();
-            
-            // 5. 存储对话记录
-            experimentData.allPracticeChats['practice_2_retry'] = JSON.parse(JSON.stringify(experimentData.chatHistory));
-        }
+        ]
     };
 }
 
@@ -731,6 +950,7 @@ function createScriptedSimulationTimeline(startNodeId) {
 }
 
 function showCrisisAssessmentModal() {
+    experimentData.timestamps.ai_risk_assessment_form_start = getCurrentTimestamp();
     // 注入弹窗 CSS
     const modalStyle = `
     <div id="crisisModal" style="
@@ -789,18 +1009,24 @@ function handleModalAssessmentSubmit() {
 
     // 2. 移除评估弹窗
     document.getElementById('crisisModal').remove();
+    experimentData.timestamps.ai_risk_assessment_form_end = getCurrentTimestamp();
 
-    // 3. 【核心修复】：根据已完成的评估次数来判断当前是哪一个 Profile
-    // 第一次提交评估后数组长度为 1 -> 对应 P1 (小B)
-    // 第二次提交评估后数组长度为 2 -> 对应 P2 (小吴)
-    // 第三次提交评估后数组长度为 3 -> 对应 P3 (小C)
-    let practiceCount = experimentData.responses.practice_assessments.length;
-    let practiceType = 'P1'; 
-
-    if (practiceCount === 2) {
-        practiceType = 'P2'; // 第二次练习，对应小吴 (高风险)
-    } else if (practiceCount === 3) {
-        practiceType = 'P3'; // 第三次练习，对应小C (中高风险)
+    // 3. 优先按当前练习 promptKey 映射 Profile，避免对照组因前两轮是配对练习而错映射到 P1
+    // PRACTICE_1 -> P1(低风险), PRACTICE_3 -> P2(高风险), SECOND_CLIENT -> P3(中风险)
+    const currentPromptKey = experimentData.currentPracticePromptKey || '';
+    let practiceType = 'P1';
+    if (currentPromptKey === 'PRACTICE_3') {
+        practiceType = 'P2';
+    } else if (currentPromptKey === 'SECOND_CLIENT') {
+        practiceType = 'P3';
+    } else {
+        // 兼容旧流程：若未记录 promptKey，则回退到历史计数映射
+        const practiceCount = experimentData.responses.practice_assessments.length;
+        if (practiceCount === 2) {
+            practiceType = 'P2';
+        } else if (practiceCount >= 3) {
+            practiceType = 'P3';
+        }
     }
 
     // 传递评估数据和修正后的练习类型
@@ -808,50 +1034,74 @@ function handleModalAssessmentSubmit() {
 }
 
 function showCounselorRecordModal() {
+    if (document.getElementById('counselorRecordModal')) {
+        return;
+    }
+    window.counselorRecordSubmitting = false;
+    const roundNo = experimentData.controlPairing.activeRoundNo || 1;
+    experimentData.timestamps[`control_counselor_record_round_${roundNo}_start`] = getCurrentTimestamp();
+
     const html = `
     <div id="counselorRecordModal" style="
         position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:10002;
         display:flex; align-items:center; justify-content:center; font-family:'Microsoft YaHei',sans-serif;">
-        <div style="width:700px; max-width:92vw; background:#fff; border-radius:12px; padding:24px;">
-            <h3 style="margin:0 0 12px 0; color:#2c3e50;">咨询记录表</h3>
-            <p style="margin:0 0 14px 0; color:#666;">请填写本轮评估结论与关键依据。</p>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                <div>
-                    <label>风险等级</label>
-                    <select id="recordRiskLevel" style="width:100%; margin-top:6px; padding:8px;">
-                        <option value="">请选择</option>
-                        <option value="high">高风险</option>
-                        <option value="medium">中风险</option>
-                        <option value="low">低风险</option>
-                    </select>
-                </div>
-                <div>
-                    <label>是否有明确计划</label>
-                    <select id="recordPlan" style="width:100%; margin-top:6px; padding:8px;">
-                        <option value="">请选择</option>
-                        <option value="yes">是</option>
-                        <option value="no">否</option>
-                    </select>
-                </div>
+        <div style="
+            background: white; padding: 30px; border-radius: 12px;
+            width: 500px; max-width: 90%; box-shadow: 0 5px 25px rgba(0,0,0,0.2);">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <h3 style="margin:0; color:#2c3e50;">请完成危机等级评估</h3>
+                <div id="counselorRecordTimer" style="font-size:13px; color:#ad6800;">剩余填写时间 05:00</div>
             </div>
-            <div style="margin-top:12px;">
-                <label>评估摘要</label>
-                <textarea id="recordSummary" style="width:100%; height:110px; margin-top:6px; padding:8px;" placeholder="请填写主要风险因素、保护因素、后续建议..."></textarea>
+            <p style="margin:10px 0 0 0; color:#666; font-size:14px;">基于您与来访者的对话，请评估其危机等级：</p>
+
+            <div style="display:flex; justify-content:space-around; margin: 20px 0; background:#f8f9fa; padding:15px; border-radius:8px;">
+                <label style="cursor:pointer;"><input type="radio" name="record_modal_crisis_level" value="high"> 🔴 高风险</label>
+                <label style="cursor:pointer;"><input type="radio" name="record_modal_crisis_level" value="medium"> 🟡 中风险</label>
+                <label style="cursor:pointer;"><input type="radio" name="record_modal_crisis_level" value="low"> 🟢 低风险</label>
             </div>
-            <div style="text-align:right; margin-top:16px;">
-                <button class="jspsych-btn" style="background:#e91e63; color:#fff; border:none;" onclick="submitCounselorRecord()">提交并结束本轮</button>
+
+            <p style="color:#666; font-size:14px;">请给出您的评级理由：</p>
+            <textarea id="recordReason"
+                placeholder="请输入评估理由...（建议从C-SSRS结构化评估、风险因素、保护性因素的角度进行分析）"
+                style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:4px; resize:none; font-family:inherit;"></textarea>
+
+            <div style="text-align:center; margin-top:20px;">
+                <button class="jspsych-btn" style="background:#e91e63; color:#fff; border:none;" onclick="submitCounselorRecord()">提交记录</button>
             </div>
         </div>
     </div>`;
     document.body.insertAdjacentHTML('beforeend', html);
+
+    let remainingSeconds = 5 * 60;
+    const timerEl = document.getElementById('counselorRecordTimer');
+    if (window.counselorRecordWriteTimer) {
+        clearInterval(window.counselorRecordWriteTimer);
+    }
+    window.counselorRecordWriteTimer = setInterval(() => {
+        remainingSeconds -= 1;
+        if (timerEl) {
+            const mm = String(Math.floor(Math.max(remainingSeconds, 0) / 60)).padStart(2, '0');
+            const ss = String(Math.max(remainingSeconds, 0) % 60).padStart(2, '0');
+            timerEl.textContent = `剩余填写时间 ${mm}:${ss}`;
+        }
+        if (remainingSeconds <= 0) {
+            clearInterval(window.counselorRecordWriteTimer);
+            window.counselorRecordWriteTimer = null;
+            submitCounselorRecord(true);
+        }
+    }, 1000);
 }
 
-async function submitCounselorRecord() {
-    const riskLevel = document.getElementById('recordRiskLevel').value;
-    const hasPlan = document.getElementById('recordPlan').value;
-    const summary = document.getElementById('recordSummary').value.trim();
-    if (!riskLevel || !hasPlan || !summary) {
-        alert('请完整填写咨询记录。');
+async function submitCounselorRecord(forceSubmit = false) {
+    if (window.counselorRecordSubmitting) {
+        return;
+    }
+
+    const levelEl = document.querySelector('input[name="record_modal_crisis_level"]:checked');
+    const reason = document.getElementById('recordReason').value.trim();
+    const riskLevel = levelEl ? levelEl.value : '';
+    if (!forceSubmit && (!riskLevel || !reason)) {
+        alert('请完整填写风险评估记录。');
         return;
     }
 
@@ -859,36 +1109,42 @@ async function submitCounselorRecord() {
         experimentData.responses.counselor_records = [];
     }
 
-    const confirmed = window.confirm('确认提交咨询记录并结束本轮吗？提交后将无法继续本轮对话。');
+    const confirmed = forceSubmit ? true : window.confirm('确认提交风险评估记录吗？提交后将无法修改。');
     if (!confirmed) {
         return;
+    }
+    window.counselorRecordSubmitting = true;
+
+    const submitBtn = document.querySelector('#counselorRecordModal button.jspsych-btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.7';
+        submitBtn.textContent = forceSubmit ? '超时自动提交中...' : '提交中...';
     }
 
     experimentData.responses.counselor_records.push({
         timestamp: getCurrentTimestamp(),
         room_id: experimentData.controlPairing.roomId,
         round_no: experimentData.controlPairing.activeRoundNo || 1,
-        risk_level: riskLevel,
-        has_plan: hasPlan,
-        summary,
+        risk_level: riskLevel || '未填写',
+        reason: reason || '（未填写）',
         chat_history: JSON.parse(JSON.stringify(experimentData.chatHistory))
     });
 
     let roundBeforeEnd = experimentData.controlPairing.activeRoundNo || 1;
-    try {
-        await endPairedRoundByCounselor();
-    } catch (error) {
-        alert(`结束失败：${error.message}`);
-        return;
-    }
+    experimentData.timestamps[`control_counselor_record_round_${roundBeforeEnd}_end`] = getCurrentTimestamp();
 
     const modal = document.getElementById('counselorRecordModal');
     if (modal) modal.remove();
+    if (window.counselorRecordWriteTimer) {
+        clearInterval(window.counselorRecordWriteTimer);
+        window.counselorRecordWriteTimer = null;
+    }
 
     const practiceType = roundBeforeEnd === 1 ? 'P1' : 'P2';
     const feedbackPayload = {
         level: riskLevel,
-        reason: summary,
+        reason: reason,
         chatHistory: JSON.parse(JSON.stringify(experimentData.chatHistory)),
         roundNo: roundBeforeEnd
     };
@@ -897,6 +1153,9 @@ async function submitCounselorRecord() {
 
 function showClientFeedbackModal() {
     if (document.getElementById('clientFeedbackModal')) return;
+    window.clientFeedbackSubmitting = false;
+    const roundNo = experimentData.controlPairing.activeRoundNo || 1;
+    experimentData.timestamps[`control_client_feedback_round_${roundNo}_start`] = getCurrentTimestamp();
     stopPairedChatPolling();
     hideFinishButton();
 
@@ -916,32 +1175,39 @@ function showClientFeedbackModal() {
 
     const html = `
     <div id="clientFeedbackModal" style="position:fixed; inset:0; z-index:10003; background:#f4f6f8; padding:18px; overflow:auto; font-family:'Microsoft YaHei',sans-serif;">
+        <div style="max-width:1200px; margin:0 auto 12px auto; background:#fff7e6; border:1px solid #ffd591; border-radius:10px; padding:12px 14px; color:#ad6800; font-weight:600;">
+            练习已结束，请填写对咨询师的反馈。
+        </div>
         <div style="display:grid; grid-template-columns: 1.1fr 0.9fr; gap:16px; max-width:1200px; margin:0 auto;">
             <section style="background:#fff; border-radius:12px; padding:14px; border:1px solid #e8ecf0;">
                 <h3 style="margin-top:0;">与咨询师聊天记录</h3>
                 <div style="height:72vh; overflow:auto; padding-right:4px;">${recordsHtml}</div>
             </section>
             <section style="background:#fff; border-radius:12px; padding:14px; border:1px solid #e8ecf0;">
-                <h3 style="margin-top:0;">来访者反馈表</h3>
-                <label>维度1：建立关系（共情、尊重、被理解感）</label>
-                <textarea id="clientFbRelationship" style="width:100%; height:90px; margin:6px 0 12px 0; padding:8px;" placeholder="你觉得咨询师在建立关系方面做得如何？"></textarea>
-                <label>维度2：风险探索（是否主动询问意念/计划/意图等）</label>
-                <textarea id="clientFbRisk" style="width:100%; height:90px; margin:6px 0 12px 0; padding:8px;" placeholder="你觉得咨询师对风险探索是否充分？"></textarea>
-                <label>维度3：保护因素探索（支持系统、牵挂、应对资源）</label>
-                <textarea id="clientFbProtective" style="width:100%; height:90px; margin:6px 0 12px 0; padding:8px;" placeholder="你觉得咨询师是否探索了你的保护因素？"></textarea>
-                <label>维度4：综合建议（给咨询师的改进建议）</label>
-                <textarea id="clientFbOverall" style="width:100%; height:90px; margin:6px 0 12px 0; padding:8px;" placeholder="请给出整体建议"></textarea>
-                <label>你感到被理解的程度（1-5）</label>
-                <input id="clientFbEmpathy" type="number" min="1" max="5" style="width:100%; padding:8px; margin:6px 0 12px 0;">
-                <label>你是否愿意继续与该咨询师沟通</label>
-                <select id="clientFbContinue" style="width:100%; padding:8px; margin:6px 0 12px 0;">
-                    <option value="">请选择</option>
-                    <option value="yes">愿意</option>
-                    <option value="unsure">不确定</option>
-                    <option value="no">不愿意</option>
-                </select>
-                <label>补充反馈</label>
-                <textarea id="clientFbNotes" style="width:100%; height:180px; margin-top:6px; padding:8px;" placeholder="请描述你在本轮咨询中的主观体验"></textarea>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <h3 style="margin-top:0;">来访者反馈表</h3>
+                    <div id="clientFeedbackTimer" style="font-size:13px; color:#ad6800;">剩余填写时间 05:00</div>
+                </div>
+                <label><strong>维度1：建立关系</strong></label>
+                <label style="font-size:13px; color:#666;">咨询师做得好的地方：</label>
+                <textarea id="clientFbRelGood" style="width:100%; height:70px; margin:6px 0 8px 0; padding:8px;" placeholder="请写出咨询师做得好的点"></textarea>
+                <label style="font-size:13px; color:#666;">咨询师需要提升的地方：</label>
+                <textarea id="clientFbRelImprove" style="width:100%; height:70px; margin:6px 0 12px 0; padding:8px;" placeholder="请写出咨询师可改进之处"></textarea>
+
+                <label><strong>维度2：风险评估</strong></label>
+                <label style="font-size:13px; color:#666;">咨询师做得好的地方：</label>
+                <textarea id="clientFbRiskGood" style="width:100%; height:70px; margin:6px 0 8px 0; padding:8px;" placeholder="请写出咨询师做得好的点"></textarea>
+                <label style="font-size:13px; color:#666;">咨询师需要提升的地方：</label>
+                <textarea id="clientFbRiskImprove" style="width:100%; height:70px; margin:6px 0 12px 0; padding:8px;" placeholder="请写出咨询师可改进之处"></textarea>
+
+                <label><strong>维度3：保护因素探索</strong></label>
+                <label style="font-size:13px; color:#666;">咨询师做得好的地方：</label>
+                <textarea id="clientFbProGood" style="width:100%; height:70px; margin:6px 0 8px 0; padding:8px;" placeholder="请写出咨询师做得好的点"></textarea>
+                <label style="font-size:13px; color:#666;">咨询师需要提升的地方：</label>
+                <textarea id="clientFbProImprove" style="width:100%; height:70px; margin:6px 0 12px 0; padding:8px;" placeholder="请写出咨询师可改进之处"></textarea>
+
+                <label><strong>维度4：综合建议</strong></label>
+                <textarea id="clientFbOverall" style="width:100%; height:110px; margin:6px 0 12px 0; padding:8px;" placeholder="请给出整体建议"></textarea>
                 <div style="text-align:right; margin-top:14px;">
                     <button class="jspsych-btn" style="background:#27ae60; color:white; border:none;" onclick="submitClientFeedback()">提交反馈</button>
                 </div>
@@ -949,31 +1215,174 @@ function showClientFeedbackModal() {
         </div>
     </div>`;
     document.body.insertAdjacentHTML('beforeend', html);
+
+    let remainingSeconds = 5 * 60;
+    const timerEl = document.getElementById('clientFeedbackTimer');
+    if (window.clientFeedbackWriteTimer) {
+        clearInterval(window.clientFeedbackWriteTimer);
+    }
+    window.clientFeedbackWriteTimer = setInterval(() => {
+        remainingSeconds -= 1;
+        if (timerEl) {
+            const mm = String(Math.floor(Math.max(remainingSeconds, 0) / 60)).padStart(2, '0');
+            const ss = String(Math.max(remainingSeconds, 0) % 60).padStart(2, '0');
+            timerEl.textContent = `剩余填写时间 ${mm}:${ss}`;
+        }
+        if (remainingSeconds <= 0) {
+            clearInterval(window.clientFeedbackWriteTimer);
+            window.clientFeedbackWriteTimer = null;
+            submitClientFeedback(true);
+        }
+    }, 1000);
 }
 
-function submitClientFeedback() {
-    const relationshipFeedback = document.getElementById('clientFbRelationship').value.trim();
-    const riskFeedback = document.getElementById('clientFbRisk').value.trim();
-    const protectiveFeedback = document.getElementById('clientFbProtective').value.trim();
-    const overallSuggestion = document.getElementById('clientFbOverall').value.trim();
-    const empathy = document.getElementById('clientFbEmpathy').value;
-    const cont = document.getElementById('clientFbContinue').value;
-    const notes = document.getElementById('clientFbNotes').value.trim();
-    if (!relationshipFeedback || !riskFeedback || !protectiveFeedback || !overallSuggestion || !empathy || !cont || !notes) {
-        alert('请完整填写反馈表。');
+function showClientWaitingOverlay(roundNo, latestFeedback = null) {
+    const existedOverlay = document.getElementById('clientWaitingOverlay');
+    if (existedOverlay) {
+        const existedFeedbackEl = document.getElementById('clientWaitingFeedbackContent');
+        if (existedFeedbackEl && latestFeedback && typeof renderPeerFeedbackHTML === 'function') {
+            existedFeedbackEl.innerHTML = renderPeerFeedbackHTML(latestFeedback);
+        }
+        return;
+    }
+    window.clientReviewProceeding = false;
+
+    const initialFeedbackHtml = typeof renderPeerFeedbackHTML === 'function'
+        ? renderPeerFeedbackHTML(latestFeedback)
+        : '<p style="color:#666;">反馈内容加载中...</p>';
+    const html = `
+    <div id="clientWaitingOverlay" style="position:fixed; inset:0; z-index:10004; background:rgba(244,246,248,0.98); overflow:auto; font-family:'Microsoft YaHei',sans-serif; padding:22px;">
+        <div style="max-width:900px; margin:0 auto; background:#fff; border-radius:15px; box-shadow:0 10px 40px rgba(0,0,0,0.08); overflow:hidden;">
+            <div style="background:linear-gradient(135deg, #2f80ed 0%, #56ccf2 100%); color:#fff; padding:28px; text-align:center;">
+                <h2 style="margin:0; font-size:30px; letter-spacing:1px;">危机评估复盘报告</h2>
+            </div>
+            <div style="padding:28px;">
+                <h3 style="color:#222; border-left:5px solid #2f80ed; padding-left:15px; margin:0 0 12px 0;">第一部分：共同阅读提示</h3>
+                <div style="margin:0 0 22px 0; color:#5f6368; font-size:15px; display:flex; justify-content:space-between; gap:12px;">
+                    <span id="clientWaitingText">您的反馈已提交，咨询师正在阅读反馈，请耐心等候。</span>
+                    <span id="clientReadTimer" style="color:#ad6800;">共同阅读剩余 05:00</span>
+                </div>
+                <div style="height:1px; background:#eee; margin:16px 0 24px 0;"></div>
+                <h3 style="color:#222; border-left:5px solid #2f80ed; padding-left:15px; margin:0 0 12px 0;">第二部分：您提交的反馈</h3>
+                <div id="clientWaitingFeedbackContent">${initialFeedbackHtml}</div>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    let remainingSeconds = 5 * 60;
+    const timerEl = document.getElementById('clientReadTimer');
+    const textEl = document.getElementById('clientWaitingText');
+    const feedbackEl = document.getElementById('clientWaitingFeedbackContent');
+
+    if (window.clientReviewWaitTimer) {
+        clearInterval(window.clientReviewWaitTimer);
+    }
+    if (window.clientReviewPollTimer) {
+        clearInterval(window.clientReviewPollTimer);
+    }
+
+    const tryProceed = async () => {
+        if (window.clientReviewProceeding) {
+            return;
+        }
+        try {
+            const payload = await fetchPairedClientFeedback(roundNo);
+            if (payload && payload.submitted && payload.feedback && typeof renderPeerFeedbackHTML === 'function' && feedbackEl) {
+                feedbackEl.innerHTML = renderPeerFeedbackHTML(payload.feedback);
+            }
+            if (payload && payload.counselor_review_ready) {
+                window.clientReviewProceeding = true;
+                if (window.clientReviewWaitTimer) clearInterval(window.clientReviewWaitTimer);
+                if (window.clientReviewPollTimer) clearInterval(window.clientReviewPollTimer);
+                window.clientReviewWaitTimer = null;
+                window.clientReviewPollTimer = null;
+                const overlay = document.getElementById('clientWaitingOverlay');
+                if (overlay) overlay.remove();
+                proceedToNextStage();
+            }
+        } catch (error) {
+            if (textEl) textEl.textContent = `正在等待搭档阅读（网络波动：${error.message}）`;
+        }
+    };
+
+    window.clientReviewWaitTimer = setInterval(() => {
+        remainingSeconds -= 1;
+        if (timerEl) {
+            const mm = String(Math.floor(Math.max(remainingSeconds, 0) / 60)).padStart(2, '0');
+            const ss = String(Math.max(remainingSeconds, 0) % 60).padStart(2, '0');
+            timerEl.textContent = `共同阅读剩余 ${mm}:${ss}`;
+        }
+        if (remainingSeconds <= 0) {
+            if (window.clientReviewProceeding) {
+                return;
+            }
+            window.clientReviewProceeding = true;
+            clearInterval(window.clientReviewWaitTimer);
+            window.clientReviewWaitTimer = null;
+            if (window.clientReviewPollTimer) {
+                clearInterval(window.clientReviewPollTimer);
+                window.clientReviewPollTimer = null;
+            }
+            if (textEl) {
+                textEl.textContent = '已达到最长等待时间，将继续下一步。';
+            }
+            setTimeout(() => {
+                const overlay = document.getElementById('clientWaitingOverlay');
+                if (overlay) overlay.remove();
+                proceedToNextStage();
+            }, 800);
+        }
+    }, 1000);
+
+    window.clientReviewPollTimer = setInterval(tryProceed, 2000);
+    tryProceed();
+}
+
+function submitClientFeedback(forceSubmit = false) {
+    if (window.clientFeedbackSubmitting) {
         return;
     }
 
+    const relationshipGood = document.getElementById('clientFbRelGood').value.trim();
+    const relationshipImprove = document.getElementById('clientFbRelImprove').value.trim();
+    const riskGood = document.getElementById('clientFbRiskGood').value.trim();
+    const riskImprove = document.getElementById('clientFbRiskImprove').value.trim();
+    const protectiveGood = document.getElementById('clientFbProGood').value.trim();
+    const protectiveImprove = document.getElementById('clientFbProImprove').value.trim();
+    const overallSuggestion = document.getElementById('clientFbOverall').value.trim();
+    if (
+        !forceSubmit &&
+        (
+            !relationshipGood || !relationshipImprove ||
+            !riskGood || !riskImprove ||
+            !protectiveGood || !protectiveImprove ||
+            !overallSuggestion
+        )
+    ) {
+        alert('请完整填写反馈表。');
+        return;
+    }
+    window.clientFeedbackSubmitting = true;
+
+    const submitBtn = document.querySelector('#clientFeedbackModal button.jspsych-btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.7';
+        submitBtn.textContent = forceSubmit ? '超时自动提交中...' : '提交中...';
+    }
+
+    const fallbackText = '（未填写）';
     const roundNo = experimentData.controlPairing.activeRoundNo || 1;
     const payload = {
         round_no: roundNo,
-        relationship_feedback: relationshipFeedback,
-        risk_exploration_feedback: riskFeedback,
-        protective_factor_feedback: protectiveFeedback,
-        overall_suggestion: overallSuggestion,
-        empathy_score: Number(empathy),
-        continue_intent: cont,
-        notes
+        relationship_good: relationshipGood || fallbackText,
+        relationship_improve: relationshipImprove || fallbackText,
+        risk_good: riskGood || fallbackText,
+        risk_improve: riskImprove || fallbackText,
+        protective_good: protectiveGood || fallbackText,
+        protective_improve: protectiveImprove || fallbackText,
+        overall_suggestion: overallSuggestion || fallbackText,
     };
 
     if (!experimentData.responses.client_feedbacks) {
@@ -986,14 +1395,25 @@ function submitClientFeedback() {
         ...payload,
         chat_history: JSON.parse(JSON.stringify(experimentData.chatHistory))
     });
+    experimentData.timestamps[`control_client_feedback_round_${roundNo}_end`] = getCurrentTimestamp();
 
     submitPairedClientFeedback(payload)
         .then(() => {
+            if (window.clientFeedbackWriteTimer) {
+                clearInterval(window.clientFeedbackWriteTimer);
+                window.clientFeedbackWriteTimer = null;
+            }
             const modal = document.getElementById('clientFeedbackModal');
             if (modal) modal.remove();
-            proceedToNextStage();
+            showClientWaitingOverlay(roundNo, payload);
         })
         .catch(error => {
+            window.clientFeedbackSubmitting = false;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.textContent = '提交反馈';
+            }
             alert(`提交失败：${error.message}`);
         });
 }

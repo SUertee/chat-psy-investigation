@@ -16,6 +16,10 @@ def advance_round(room_id: str, participant_id: str) -> dict:
     return store.advance_round(room_id, participant_id)
 
 
+def sync_round_start(room_id: str, participant_id: str, round_no: int) -> dict:
+    return store.sync_round_start(room_id=room_id, participant_id=participant_id, round_no=round_no)
+
+
 def leave_room(room_id: str, participant_id: str) -> dict:
     return store.leave_room(room_id, participant_id)
 
@@ -28,27 +32,31 @@ def submit_client_feedback(
     room_id: str,
     participant_id: str,
     round_no: int,
-    relationship_feedback: str,
-    risk_exploration_feedback: str,
-    protective_factor_feedback: str,
+    relationship_good: str,
+    relationship_improve: str,
+    risk_good: str,
+    risk_improve: str,
+    protective_good: str,
+    protective_improve: str,
     overall_suggestion: str,
-    empathy_score: int,
-    continue_intent: str,
-    notes: str,
 ) -> dict:
     return store.submit_client_feedback(
         room_id=room_id,
         participant_id=participant_id,
         round_no=round_no,
-        relationship_feedback=relationship_feedback,
-        risk_exploration_feedback=risk_exploration_feedback,
-        protective_factor_feedback=protective_factor_feedback,
+        relationship_good=relationship_good,
+        relationship_improve=relationship_improve,
+        risk_good=risk_good,
+        risk_improve=risk_improve,
+        protective_good=protective_good,
+        protective_improve=protective_improve,
         overall_suggestion=overall_suggestion,
-        empathy_score=empathy_score,
-        continue_intent=continue_intent,
-        notes=notes,
     )
 
 
 def get_client_feedback(room_id: str, participant_id: str, round_no: int) -> dict:
     return store.get_client_feedback(room_id=room_id, participant_id=participant_id, round_no=round_no)
+
+
+def mark_counselor_review_complete(room_id: str, participant_id: str, round_no: int) -> dict:
+    return store.mark_counselor_review_complete(room_id=room_id, participant_id=participant_id, round_no=round_no)

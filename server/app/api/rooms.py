@@ -7,10 +7,14 @@ from fastapi import APIRouter, HTTPException, Query
 from ..schemas.room import (
     RoomAdvanceRequest,
     RoomAdvanceResponse,
+    RoomSyncStartRequest,
+    RoomSyncStartResponse,
     RoomEndRoundRequest,
     RoomEndRoundResponse,
     RoomClientFeedbackRequest,
     RoomClientFeedbackResponse,
+    RoomReviewCompleteRequest,
+    RoomReviewCompleteResponse,
     RoomLeaveRequest,
     RoomLeaveResponse,
     RoomResponse,
@@ -21,6 +25,8 @@ from ..services.room_service import (
     get_client_feedback,
     get_room,
     leave_room,
+    sync_round_start,
+    mark_counselor_review_complete,
     submit_client_feedback,
 )
 
@@ -40,6 +46,14 @@ def get_room_endpoint(room_id: str) -> dict:
 def advance_round_endpoint(room_id: str, payload: RoomAdvanceRequest) -> dict:
     try:
         return advance_round(room_id, payload.participant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/rooms/{room_id}/sync-start", response_model=RoomSyncStartResponse)
+def sync_round_start_endpoint(room_id: str, payload: RoomSyncStartRequest) -> dict:
+    try:
+        return sync_round_start(room_id=room_id, participant_id=payload.participant_id, round_no=payload.round_no)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -67,13 +81,25 @@ def submit_client_feedback_endpoint(room_id: str, payload: RoomClientFeedbackReq
             room_id=room_id,
             participant_id=payload.participant_id,
             round_no=payload.round_no,
-            relationship_feedback=payload.relationship_feedback,
-            risk_exploration_feedback=payload.risk_exploration_feedback,
-            protective_factor_feedback=payload.protective_factor_feedback,
+            relationship_good=payload.relationship_good,
+            relationship_improve=payload.relationship_improve,
+            risk_good=payload.risk_good,
+            risk_improve=payload.risk_improve,
+            protective_good=payload.protective_good,
+            protective_improve=payload.protective_improve,
             overall_suggestion=payload.overall_suggestion,
-            empathy_score=payload.empathy_score,
-            continue_intent=payload.continue_intent,
-            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/rooms/{room_id}/review-complete", response_model=RoomReviewCompleteResponse)
+def review_complete_endpoint(room_id: str, payload: RoomReviewCompleteRequest) -> dict:
+    try:
+        return mark_counselor_review_complete(
+            room_id=room_id,
+            participant_id=payload.participant_id,
+            round_no=payload.round_no,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

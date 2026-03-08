@@ -25,6 +25,7 @@ let experimentData = {
         gender: ''
     },
     group: '', 
+    splitHalfOrder: '',
     startTime: '',
     timestamps: {},
     responses: {
@@ -35,10 +36,10 @@ let experimentData = {
     tutorChatHistory: [], // AI Tutor 记录
     // >>> 新增：用于永久保存三次练习的完整对话 <<<
     allPracticeChats: {
-        practice_1: [],
-        practice_2: [],
-        practice_3: [],
-        practice_2_retry: [] // 如果有二次练习
+        PRACTICE_1: [],
+        PRACTICE_3: [],
+        SECOND_CLIENT: [],
+        practice_2_retry: [] // 兼容旧键
     },
     controlPairing: {
         registered: false,
@@ -53,7 +54,9 @@ let experimentData = {
         isCounselor: false,
         activeScenario: '',
         roundEnded: false,
-        activeRoundNo: 1
+        activeRoundNo: 1,
+        firstRoundRole: '',
+        secondRoundRole: ''
     },
     chatMode: 'ai',
     crisisAssessment: {},

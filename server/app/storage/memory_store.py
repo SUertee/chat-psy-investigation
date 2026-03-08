@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import random
 from typing import Any
 from uuid import uuid4
@@ -143,6 +143,52 @@ class MemoryStore:
             "ready_count": len(room["round_ready"]),
         }
 
+    def sync_round_start(self, room_id: str, participant_id: str, round_no: int, countdown_seconds: int = 30) -> dict[str, Any]:
+        room = self.get_room(room_id)
+        if participant_id not in {room["participant_a"], room["participant_b"]}:
+            raise ValueError("participant is not in room")
+        if round_no < 1 or round_no > len(room["rounds"]):
+            raise ValueError("invalid round number")
+
+        sync_state = room.setdefault("entry_sync", {})
+        round_sync = sync_state.setdefault(
+            round_no,
+            {
+                "ready_participants": set(),
+                "countdown_seconds": countdown_seconds,
+                "start_at": None,
+            },
+        )
+        round_sync["ready_participants"].add(participant_id)
+
+        now = datetime.now(timezone.utc)
+        if round_sync["start_at"] is None and len(round_sync["ready_participants"]) == 2:
+            round_sync["start_at"] = (now + timedelta(seconds=round_sync["countdown_seconds"])).isoformat()
+
+        start_at = round_sync["start_at"]
+        if start_at is None:
+            return {
+                "room_id": room_id,
+                "round_no": round_no,
+                "status": "waiting",
+                "countdown_seconds": round_sync["countdown_seconds"],
+                "start_at": None,
+                "server_now": now.isoformat(),
+                "remaining_ms": None,
+            }
+
+        start_at_dt = datetime.fromisoformat(start_at)
+        remaining_ms = max(0, int((start_at_dt - now).total_seconds() * 1000))
+        return {
+            "room_id": room_id,
+            "round_no": round_no,
+            "status": "ready",
+            "countdown_seconds": round_sync["countdown_seconds"],
+            "start_at": start_at,
+            "server_now": now.isoformat(),
+            "remaining_ms": remaining_ms,
+        }
+
     def end_round(self, room_id: str, participant_id: str) -> dict[str, Any]:
         room = self.get_room(room_id)
         if participant_id not in {room["participant_a"], room["participant_b"]}:
@@ -200,13 +246,13 @@ class MemoryStore:
         room_id: str,
         participant_id: str,
         round_no: int,
-        relationship_feedback: str,
-        risk_exploration_feedback: str,
-        protective_factor_feedback: str,
+        relationship_good: str,
+        relationship_improve: str,
+        risk_good: str,
+        risk_improve: str,
+        protective_good: str,
+        protective_improve: str,
         overall_suggestion: str,
-        empathy_score: int,
-        continue_intent: str,
-        notes: str,
     ) -> dict[str, Any]:
         room = self.get_room(room_id)
         if participant_id not in {room["participant_a"], room["participant_b"]}:
@@ -222,13 +268,13 @@ class MemoryStore:
             raise ValueError("round has not ended yet")
 
         feedback_payload = {
-            "relationship_feedback": relationship_feedback,
-            "risk_exploration_feedback": risk_exploration_feedback,
-            "protective_factor_feedback": protective_factor_feedback,
+            "relationship_good": relationship_good,
+            "relationship_improve": relationship_improve,
+            "risk_good": risk_good,
+            "risk_improve": risk_improve,
+            "protective_good": protective_good,
+            "protective_improve": protective_improve,
             "overall_suggestion": overall_suggestion,
-            "empathy_score": empathy_score,
-            "continue_intent": continue_intent,
-            "notes": notes,
         }
         record = {
             "room_id": room_id,
@@ -244,6 +290,7 @@ class MemoryStore:
             "submitted": True,
             "submitted_at": record["submitted_at"],
             "feedback": feedback_payload,
+            "counselor_review_ready": bool(room.get("round_review_ready", {}).get(round_no)),
         }
 
     def get_client_feedback(self, room_id: str, participant_id: str, round_no: int) -> dict[str, Any]:
@@ -261,6 +308,7 @@ class MemoryStore:
                 "submitted": False,
                 "submitted_at": None,
                 "feedback": None,
+                "counselor_review_ready": bool(room.get("round_review_ready", {}).get(round_no)),
             }
         return {
             "room_id": room_id,
@@ -268,6 +316,27 @@ class MemoryStore:
             "submitted": True,
             "submitted_at": record["submitted_at"],
             "feedback": record["feedback"],
+            "counselor_review_ready": bool(room.get("round_review_ready", {}).get(round_no)),
+        }
+
+    def mark_counselor_review_complete(self, room_id: str, participant_id: str, round_no: int) -> dict[str, Any]:
+        room = self.get_room(room_id)
+        if participant_id not in {room["participant_a"], room["participant_b"]}:
+            raise ValueError("participant is not in room")
+        if round_no < 1 or round_no > len(room["rounds"]):
+            raise ValueError("invalid round number")
+
+        round_plan = room["rounds"][round_no - 1]
+        expected_counselor_id = room["participant_a"] if round_plan["counselor_key"] == "A" else room["participant_b"]
+        if participant_id != expected_counselor_id:
+            raise ValueError("only counselor role can mark review complete")
+
+        room.setdefault("round_review_ready", {})[round_no] = True
+        return {
+            "room_id": room_id,
+            "round_no": round_no,
+            "review_ready": True,
+            "reviewed_by": participant_id,
         }
 
     def send_message(self, room_id: str, participant_id: str, round_no: int, content: str) -> dict[str, Any]:
@@ -360,6 +429,8 @@ class MemoryStore:
             ],
             "round_ready": set(),
             "round_feedbacks": {},
+            "round_review_ready": {},
+            "entry_sync": {},
         }
         self.rooms[room_id] = room
         self.messages[room_id] = []

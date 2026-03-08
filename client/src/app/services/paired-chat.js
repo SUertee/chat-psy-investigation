@@ -117,6 +117,22 @@ async function fetchRoomState() {
     return room;
 }
 
+async function syncPairedChatStart(roundNo) {
+    if (!experimentData.controlPairing.roomId || !experimentData.participantId) {
+        throw new Error('房间未就绪，无法同步进入会话。');
+    }
+    return backendRequest(
+        `/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/sync-start`,
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                participant_id: experimentData.participantId,
+                round_no: roundNo
+            }),
+        }
+    );
+}
+
 function getCurrentControlRoundNumber(promptKey) {
     if (promptKey === 'PRACTICE_1') {
         return 1;
@@ -140,17 +156,19 @@ function getParticipantRoomKey(room) {
 function getRoundScenarioProfile(scenario) {
     if (scenario === 'xiaowu_high') {
         return {
-            title: '来访者脚本：小吴（高风险）',
-            identity: '27岁，男性，创业失败负债',
-            pressure: '经济崩盘、家庭断裂、严重失眠与羞耻感',
-            crisis: '存在明确计划与较高意图，需重点评估计划、意图与行为准备'
+            title: '来访者脚本',
+            identity: '27 岁，男性，大学毕业后自主创业者',
+            situation: '创业失败负债',
+            stress: `<ul><li><strong>经济：</strong>身无分文，负债 15 万，融资失败，时常有催债人上门。</li><li><strong>家庭：</strong>家人指责并断绝关系，出租屋即将到期。</li><li><strong>心理：</strong>深度挫败感、社会性死亡、极度自我厌恶。</li><li><strong>生理：</strong>严重失眠，两周内体重骤降 5 斤。</li></ul>`,
+            crisisDetail: `<div style="background:#fff5f5; padding:12px; border-radius:8px; border:1px solid #feb2b2; line-height:1.7; color:#2d3748; font-size:13px;"><p style="margin: 0 0 8px 0;"><strong>🔴 自杀想法极强（9/10）：</strong>认为解脱是唯一出路，情绪崩溃时出现幻听。</p><p style="margin: 0 0 8px 0;"><strong>📍 具体自杀计划：</strong>非常明确——网购安眠药，选定本周五在出租屋实施。</p><p style="margin: 0 0 8px 0;"><strong>🎯 实施意图极高（8/10）：</strong>认为人生已无转机，已做好最终决定。</p><p style="margin: 0 0 8px 0;"><strong>📦 准备行为充分：</strong>已买药确认剂量；给室友发告别信息；整理个人物品。</p><p style="margin: 0 0 8px 0;"><strong>⚠️ 风险因素：</strong>重大经济挫折；支持系统断裂；近期负性事件集中爆发。</p><p style="margin: 0;"><strong>🛡️ 保护因素：</strong>对女朋友的愧疚；生理怕疼本能；名牌大学毕业，如果去找工作其实能能找到，可以把钱慢慢还上。</p></div>`
         };
     }
     return {
-        title: '来访者脚本：小B（低风险）',
-        identity: '17岁，高二女生，学业退步后陷入绝望',
-        pressure: '学业压力、父母指责、失眠与躯体不适',
-        crisis: '存在消极意念，但无明确计划和实施意图'
+        title: '来访者脚本',
+        identity: '17 岁，高二女生，曾品学兼优',
+        situation: '寒假在家，期末考试成绩大幅滑坡，排名退步严重。',
+        stress: `<ul><li><strong>学业：</strong>注意力难集中，长期失眠，学业吃力。</li><li><strong>家庭：</strong>父母期望极高，因成绩下降而严厉指责。</li><li><strong>心理：</strong>强烈怀疑自己的能力，感到绝望。</li><li><strong>生理：</strong>强烈的头疼和胃疼。</li></ul>`,
+        crisisDetail: `<div style="background:#f0fff4; padding:12px; border-radius:8px; border:1px solid #9ae6b4; line-height:1.7; color:#2d3748; font-size:13px;"><p style="margin: 0 0 8px 0;"><strong>🟢 自杀想法中等（6/10）：</strong>觉得很失败，希望睡着了不用再醒来。</p><p style="margin: 0 0 8px 0;"><strong>📍 没有明确的自杀计划：</strong>只是希望痛苦能够停止，没想过真的结束生命。</p><p style="margin: 0 0 8px 0;"><strong>🎯 无明确意图。</strong></p><p style="margin: 0 0 8px 0;"><strong>📦 准备行为：</strong>未采取任何具体自杀准备或实施行为。</p><p style="margin: 0 0 8px 0;"><strong>⚠️ 风险因素：</strong>持续学业压力，缺乏父母支持，身体不适。</p><p style="margin: 0;"><strong>🛡️ 保护因素：</strong>祖父母的关爱；有好友谈心；通过写日记和听音乐平复心情。</p></div>`
     };
 }
 
@@ -189,9 +207,10 @@ function getControlClientProfileHTML() {
     return `
         <h4>${profile.title}</h4>
         <div class="profile-block"><strong>身份背景：</strong>${profile.identity}</div>
-        <div class="profile-block"><strong>压力来源：</strong>${profile.pressure}</div>
-        <div class="profile-block"><strong>危机线索：</strong>${profile.crisis}</div>
-        <div class="profile-block"><strong>提醒：</strong>请持续以“来访者”视角回应，避免一次性抛出全部细节。</div>
+        <div class="profile-block"><strong>当前处境：</strong>${profile.situation || ''}</div>
+        <div class="profile-block"><strong>核心压力来源：</strong>${profile.stress || ''}</div>
+        <div class="profile-block"><strong>风险与保护线索：</strong>${profile.crisisDetail || ''}</div>
+        <div class="profile-block"><strong>提醒：</strong>请持续以“来访者”角色回应，符合人设，避免一次性抛出全部细节。</div>
     `;
 }
 
@@ -248,7 +267,7 @@ async function refreshPairedMessages() {
         if (isSelf) {
             addChatMessage('user', message.content, { avatarLabel: '我' });
         } else {
-            const peerAvatar = message.sender_role === 'counselor' ? '资' : '来';
+            const peerAvatar = message.sender_role === 'counselor' ? '咨' : '访';
             addChatMessage('ai', message.content, { avatarLabel: peerAvatar });
         }
         experimentData.chatHistory.push({
@@ -313,21 +332,10 @@ function getControlRoundBrief(room, roundNo) {
     return `已进入配对房间。当前为第 ${roundNo} 轮，你的角色是${roleText}。本轮脚本场景：${scenarioText}。`;
 }
 
-async function initializePairedChat(promptKey) {
+async function preparePairedChatSession(promptKey) {
     experimentData.chatMode = 'paired';
-    experimentData.chatHistory = [];
-    experimentData.pairedChatHistory = [];
     experimentData.controlPairing.roomLostNotified = false;
-    experimentData.controlPairing.lastMessageId = 0;
     experimentData.controlPairing.roundEnded = false;
-
-    const messagesDiv = document.getElementById('chatMessages');
-    if (messagesDiv) {
-        messagesDiv.innerHTML = '';
-    }
-
-    addChatMessage('system', '正在连接配对房间，请稍候...');
-    setChatComposerEnabled(false);
 
     await ensureControlParticipantRegistered();
     if (!experimentData.controlPairing.roomId) {
@@ -337,19 +345,49 @@ async function initializePairedChat(promptKey) {
     const room = await fetchRoomState();
     const roundNo = getCurrentControlRoundNumber(promptKey);
     experimentData.controlPairing.activeRoundNo = roundNo;
+
     const role = resolveRoundRole(room, roundNo);
     experimentData.controlPairing.roleInCurrentRound = role.roleText;
     experimentData.controlPairing.isCounselor = role.isCounselor;
     experimentData.controlPairing.activeScenario = role.roundInfo.scenario;
     experimentData.controlPairing.activeProfile = role.profile;
-    mountClientProfilePanel();
+    if (roundNo === 1) {
+        experimentData.controlPairing.firstRoundRole = role.roleText;
+    } else if (roundNo === 2) {
+        experimentData.controlPairing.secondRoundRole = role.roleText;
+    }
 
-    addChatMessage('system', getControlRoundBrief(room, roundNo));
-    experimentData.chatHistory.push({
-        timestamp: getCurrentTimestamp(),
-        sender: 'ai',
-        content: getControlRoundBrief(room, roundNo)
-    });
+    return {
+        roundNo,
+        roleText: role.roleText,
+        isCounselor: role.isCounselor
+    };
+}
+
+async function initializePairedChat(promptKey, options = {}) {
+    experimentData.chatMode = 'paired';
+    experimentData.chatHistory = [];
+    experimentData.controlPairing.roomLostNotified = false;
+    experimentData.controlPairing.lastMessageId = 0;
+    experimentData.controlPairing.roundEnded = false;
+
+    const messagesDiv = document.getElementById('chatMessages');
+    if (messagesDiv) {
+        messagesDiv.innerHTML = '';
+    }
+
+    setChatComposerEnabled(false);
+
+    const hasPreparedRole =
+        !!experimentData.controlPairing.roomId &&
+        !!experimentData.controlPairing.roleInCurrentRound;
+    if (!options.prepared || !hasPreparedRole) {
+        await preparePairedChatSession(promptKey);
+    } else {
+        // Refresh room state in case the room changed while waiting.
+        await fetchRoomState();
+    }
+    mountClientProfilePanel();
 
     setChatComposerEnabled(true);
     await refreshPairedMessages();
@@ -441,13 +479,13 @@ async function submitPairedClientFeedback(payload) {
             body: JSON.stringify({
                 participant_id: experimentData.participantId,
                 round_no: payload.round_no,
-                relationship_feedback: payload.relationship_feedback,
-                risk_exploration_feedback: payload.risk_exploration_feedback,
-                protective_factor_feedback: payload.protective_factor_feedback,
+                relationship_good: payload.relationship_good,
+                relationship_improve: payload.relationship_improve,
+                risk_good: payload.risk_good,
+                risk_improve: payload.risk_improve,
+                protective_good: payload.protective_good,
+                protective_improve: payload.protective_improve,
                 overall_suggestion: payload.overall_suggestion,
-                empathy_score: payload.empathy_score,
-                continue_intent: payload.continue_intent,
-                notes: payload.notes,
             }),
         }
     );
@@ -463,5 +501,21 @@ async function fetchPairedClientFeedback(roundNo) {
     });
     return backendRequest(
         `/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/client-feedback?${query.toString()}`
+    );
+}
+
+async function markPairedReviewComplete(roundNo) {
+    if (!experimentData.controlPairing.roomId || !experimentData.participantId) {
+        throw new Error('房间未就绪，无法标记反馈阅读完成。');
+    }
+    return backendRequest(
+        `/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/review-complete`,
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                participant_id: experimentData.participantId,
+                round_no: roundNo,
+            }),
+        }
     );
 }

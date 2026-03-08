@@ -186,7 +186,44 @@ function createPersonalInfoTrial() {
     };
 }
 
+function ensureSplitHalfCounterbalanceOrder() {
+    if (experimentData.splitHalfOrder) {
+        return experimentData.splitHalfOrder;
+    }
+    const order = Math.random() < 0.5 ? 'AB' : 'BA';
+    experimentData.splitHalfOrder = order;
+    experimentData.responses.split_half_counterbalance = {
+        order,
+        pretest_half: order === 'AB' ? 'A' : 'B',
+        posttest_half: order === 'AB' ? 'B' : 'A',
+        assigned_at: getCurrentTimestamp()
+    };
+    experimentData.timestamps.split_half_order_assigned = getCurrentTimestamp();
+    return order;
+}
+
+function getCounterbalancedQuestionnaireConfig(phase) {
+    const order = ensureSplitHalfCounterbalanceOrder();
+    const preCfg = JSON.parse(JSON.stringify(QUESTIONNAIRES.pretest));
+    const postCfg = JSON.parse(JSON.stringify(QUESTIONNAIRES.posttest));
+
+    const preScenarioPage = (preCfg.pages || []).find(
+        p => Array.isArray(p.questions) && p.questions.some(q => String(q.id || '').startsWith('pt_case_'))
+    );
+    const postScenarioPage = (postCfg.pages || []).find(
+        p => Array.isArray(p.questions) && p.questions.some(q => String(q.id || '').startsWith('post_case_'))
+    );
+
+    if (order === 'BA' && preScenarioPage && postScenarioPage) {
+        const swapped = preScenarioPage.questions;
+        preScenarioPage.questions = postScenarioPage.questions;
+        postScenarioPage.questions = swapped;
+    }
+
+    return phase === 'posttest' ? postCfg : preCfg;
+}
+
 // ===== 前测问卷 =====
 function createPretestQuestionnaire() {
-    return createQuestionnaireTrial('pretest', QUESTIONNAIRES.pretest);
+    return createQuestionnaireTrial('pretest', getCounterbalancedQuestionnaireConfig('pretest'));
 }

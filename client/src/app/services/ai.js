@@ -266,10 +266,10 @@ async function generateSupervisorFeedback() {
                 .dim-title {
                     font-size: 1.3em;
                     font-weight: bold;
-                    color: #2980b9;
-                    background-color: #f0f7fb;
+                    color: #222;
+                    background-color: #f5f5f5;
                     padding: 10px 15px;
-                    border-left: 5px solid #2980b9;
+                    border-left: 5px solid #444;
                     margin-top: 30px;
                     margin-bottom: 15px;
                     border-radius: 0 4px 4px 0;
@@ -285,42 +285,42 @@ async function generateSupervisorFeedback() {
                 /* 标签样式：做得好的 */
                 .tag-good {
                     display: inline-block;
-                    background-color: #e8f8f0;
-                    color: #27ae60;
+                    background-color: #f7f7f7;
+                    color: #222;
                     padding: 2px 8px;
                     border-radius: 4px;
                     font-weight: bold;
                     margin-top: 10px;
                     margin-right: 5px;
-                    border: 1px solid #ccebd6;
+                    border: 1px solid #ddd;
                 }
                 
                 /* 标签样式：需要提升 */
                 .tag-bad {
                     display: inline-block;
-                    background-color: #fdf2e9;
-                    color: #e67e22;
+                    background-color: #f7f7f7;
+                    color: #222;
                     padding: 2px 8px;
                     border-radius: 4px;
                     font-weight: bold;
                     margin-top: 10px;
                     margin-right: 5px;
-                    border: 1px solid #fae5d3;
+                    border: 1px solid #ddd;
                 }
 
                 /* 总结部分 */
                 .feedback-summary {
                     margin-top: 40px;
                     padding: 20px;
-                    background-color: #fff8e1;
-                    border: 1px dashed #ffc107;
+                    background-color: #f7f7f7;
+                    border: 1px dashed #ccc;
                     border-radius: 8px;
                 }
             </style>
 
             <div class="feedback-card">
                 <div style="text-align:center; margin-bottom:30px; border-bottom:1px solid #eee; padding-bottom:20px;">
-                    <h2 style="color:#2c3e50; margin:0;">📑 模拟咨询督导报告</h2>
+                    <h2 style="color:#222; margin:0;">模拟咨询督导报告</h2>
                     <p style="color:#999; font-size:0.9em; margin-top:10px;">基于本次练习生成的个性化分析</p>
                 </div>
 
@@ -363,11 +363,17 @@ function formatFeedbackContent(text) {
     // 3. 高亮 "表现描述"
     html = html.replace(/(表现描述[：:])/g, '<br><span class="tag-desc">📝 $1</span>');
 
-    // 4. 高亮 "做得好的地方"
-    html = html.replace(/(做得好的地方[：:])/g, '<br><span class="tag-good">✅ $1</span>');
+    // 4. 高亮 "做得好的地方"，并统一补全主语“咨询师”
+    html = html.replace(/((?:咨询师)?做得好的地方[：:])/g, (match) => {
+        const normalized = match.startsWith('咨询师') ? match : `咨询师${match}`;
+        return `<br><span class="tag-good">✅ ${normalized}</span>`;
+    });
 
-    // 5. 高亮 "需要提升的地方" 或 "可以提升的地方"
-    html = html.replace(/(需要提升的地方[：:]|可以提升的地方[：:]|需要改进的地方[：:])/g, '<br><span class="tag-bad">💡 $1</span>');
+    // 5. 高亮 "需要提升的地方" 或 "可以提升的地方"，并统一补全主语“咨询师”
+    html = html.replace(/((?:咨询师)?需要提升的地方[：:]|(?:咨询师)?可以提升的地方[：:]|(?:咨询师)?需要改进的地方[：:])/g, (match) => {
+        const normalized = match.startsWith('咨询师') ? match : `咨询师${match}`;
+        return `<br><span class="tag-bad">💡 ${normalized}</span>`;
+    });
 
     // 6. 处理 "总结："
     html = html.replace(/(总结[：:]|整体评价[：:])/g, '<div class="feedback-summary"><strong>🎓 $1</strong>');
@@ -385,41 +391,37 @@ function renderPeerFeedbackHTML(feedback) {
     if (!feedback) {
         return '';
     }
-    const continueMap = {
-        yes: '愿意',
-        unsure: '不确定',
-        no: '不愿意',
-    };
     return `
         <div style="display:grid; gap:12px;">
             <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
                 <strong>维度1：建立关系</strong>
-                <p style="margin:8px 0 0 0;">${feedback.relationship_feedback || ''}</p>
+                <p style="margin:8px 0 0 0;"><strong>咨询师做得好的地方：</strong>${feedback.relationship_good || ''}</p>
+                <p style="margin:6px 0 0 0;"><strong>咨询师需要提升的地方：</strong>${feedback.relationship_improve || ''}</p>
             </div>
             <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
-                <strong>维度2：风险探索</strong>
-                <p style="margin:8px 0 0 0;">${feedback.risk_exploration_feedback || ''}</p>
+                <strong>维度2：风险评估</strong>
+                <p style="margin:8px 0 0 0;"><strong>咨询师做得好的地方：</strong>${feedback.risk_good || ''}</p>
+                <p style="margin:6px 0 0 0;"><strong>咨询师需要提升的地方：</strong>${feedback.risk_improve || ''}</p>
             </div>
             <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
-                <strong>维度3：保护因素</strong>
-                <p style="margin:8px 0 0 0;">${feedback.protective_factor_feedback || ''}</p>
+                <strong>维度3：保护因素探索</strong>
+                <p style="margin:8px 0 0 0;"><strong>咨询师做得好的地方：</strong>${feedback.protective_good || ''}</p>
+                <p style="margin:6px 0 0 0;"><strong>咨询师需要提升的地方：</strong>${feedback.protective_improve || ''}</p>
             </div>
             <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
                 <strong>维度4：综合建议</strong>
                 <p style="margin:8px 0 0 0;">${feedback.overall_suggestion || ''}</p>
-            </div>
-            <div style="background:#f5f8ff; border:1px solid #dbe6ff; border-radius:8px; padding:14px;">
-                <p style="margin:0;"><strong>被理解程度：</strong>${feedback.empathy_score || '-'}/5</p>
-                <p style="margin:8px 0 0 0;"><strong>是否愿意继续沟通：</strong>${continueMap[feedback.continue_intent] || feedback.continue_intent || '-'}</p>
-                <p style="margin:8px 0 0 0;"><strong>补充反馈：</strong>${feedback.notes || ''}</p>
             </div>
         </div>
     `;
 }
 
 async function showSupervisorFeedbackUI(data, type, options = {}) {
+    if (document.getElementById('supFeedbackOverlay')) {
+        return;
+    }
     const mode = options.mode || 'supervisor';
-    const mainTitle = mode === 'peer' ? '危机评估复盘报告' : '📋 危机评估督导复盘报告';
+    const mainTitle = mode === 'peer' ? '危机评估复盘报告' : '危机评估督导复盘报告';
     const secondTitle = mode === 'peer' ? '第二部分：来访者扮演人同辈反馈' : '第二部分：AI 督导专业反馈';
     // 1. 根据你的实验顺序 (小B -> 小吴 -> 小C) 匹配档案
     let activeProfile;
@@ -427,7 +429,7 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
     // 第一次练习：小B (低风险)
     const profileB = {
         title: "第一次练习：个案复盘 (低风险个案)",
-        level: "<span style='color:#27ae60;'>🟢 低风险</span>",
+        level: "低风险",
         identity: "17 岁，高二女生，曾品学兼优",
         situation: "寒假在家，期末考试成绩大幅滑坡，排名退步严重。",
         stress: `<ul><li><strong>学业：</strong>注意力难集中，长期失眠，学业吃力。</li><li><strong>家庭：</strong>父母期望极高，因成绩下降而严厉指责。</li><li><strong>心理：</strong>强烈怀疑自己的能力，感到绝望。</li><li><strong>生理：</strong>强烈的头疼和胃疼。</li></ul>`,
@@ -437,7 +439,7 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
     // 第二次练习：小吴 (高风险)
     const profileWU = {
         title: "第二次练习：个案复盘 (高风险个案)",
-        level: "<span style='color:#e74c3c;'>🔴 高风险</span>",
+        level: "高风险",
         identity: "27 岁，男性，大学毕业后自主创业者",
         situation: "创业失败负债",
         stress: `<ul><li><strong>经济：</strong>身无分文，负债 15 万，融资失败，时常有催债人上门。</li><li><strong>家庭：</strong>家人指责并断绝关系，出租屋即将到期。</li><li><strong>心理：</strong>深度挫败感、社会性死亡、极度自我厌恶。</li><li><strong>生理：</strong>严重失眠，两周内体重骤降 5 斤。</li></ul>`,
@@ -447,7 +449,7 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
     // 第三次练习 (后测)：小C (中高风险)
     const profileC = {
         title: "最后一次练习 (后测)：个案复盘",
-        level: "<span style='color:#f39c12;'>🟠 中风险</span>",
+        level: "中风险",
         identity: "17岁，高二女生，长期遭受校园霸凌",
         situation: "在校被起侮辱性外号并被撞倒，父母不理解，目前躲在房间极度难受。",
         stress: `<ul><li><strong>校园霸凌：</strong>长期被孤立、造谣，被取侮辱性外号。</li><li><strong>家庭：</strong>父母归结为“爱惹事”，缺乏支持。</li><li><strong>心理：</strong>曾确诊抑郁症并休学，存在自伤行为。</li></ul>`,
@@ -464,21 +466,21 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
     <div id="supFeedbackOverlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(240, 242, 245, 0.98); z-index:10001; overflow-y:auto; padding:40px 20px; font-family:'Microsoft YaHei', sans-serif;">
         <div style="max-width:850px; margin:0 auto; background:white; border-radius:15px; box-shadow:0 10px 50px rgba(0,0,0,0.1); overflow:hidden; animation: fadeIn 0.5s ease;">
             
-            <div style="background:linear-gradient(135deg, #1a73e8 0%, #1557b0 100%); color:white; padding:35px; text-align:center;">
+            <div style="background:linear-gradient(135deg, #2f80ed 0%, #56ccf2 100%); color:white; padding:35px; text-align:center;">
                 <h1 style="margin:0; font-size:24px; letter-spacing:1px;">${mainTitle}</h1>
                 <p style="margin:10px 0 0; opacity:0.8;">${activeProfile.title}</p>
             </div>
 
             <div style="padding:40px;">
                 <div style="margin-bottom:45px;">
-                    <h3 style="color:#1a73e8; border-left:5px solid #1a73e8; padding-left:15px; margin-bottom:25px;">第一部分：来访者真实档案 (上帝视角)</h3>
+                    <h3 style="color:#222; border-left:5px solid #2f80ed; padding-left:15px; margin-bottom:25px;">第一部分：来访者真实档案 (上帝视角)</h3>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:25px; margin-bottom:25px;">
-                        <div style="background:#f8faff; padding:20px; border-radius:10px; border-top:4px solid #1a73e8;">
+                        <div style="background:#f4f9ff; padding:20px; border-radius:10px; border-top:4px solid #2f80ed;">
                             <p><strong>🎯 真实危机等级：</strong> ${activeProfile.level}</p>
                             <p><strong>👤 身份设定：</strong> ${activeProfile.identity}</p>
                             <p><strong>📍 当前处境：</strong> ${activeProfile.situation}</p>
                         </div>
-                        <div style="background:#fffcf5; padding:20px; border-radius:10px; border-top:4px solid #fbbc04;">
+                        <div style="background:#fffaf2; padding:20px; border-radius:10px; border-top:4px solid #f2a154;">
                             <p><strong>🔥 核心压力来源分析：</strong></p>
                             ${activeProfile.stress}
                         </div>
@@ -490,14 +492,18 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
                 <div style="height:1px; background:#eee; margin:40px 0;"></div>
 
                 <div>
-                    <h3 style="color:#1a73e8; border-left:5px solid #1a73e8; padding-left:15px; margin-bottom:25px;">${secondTitle}</h3>
+                    <h3 style="color:#222; border-left:5px solid #2f80ed; padding-left:15px; margin-bottom:25px;">${secondTitle}</h3>
                     ${mode === 'peer' ? `
                     <div style="margin:-10px 0 18px 0; color:#5f6368; font-size:14px; display:flex; justify-content:space-between; gap:12px;">
-                        <span>该页面将实时刷新来访者反馈。</span>
-                        <span id="peerFeedbackTimer">剩余查看时间 05:00</span>
-                    </div>` : ''}
+                        <span id="peerFeedbackStatusText">请等待来访者提交反馈（最多 05:00）。</span>
+                        <span id="peerFeedbackTimer">等待剩余 05:00</span>
+                    </div>` : `
+                    <div style="margin:-10px 0 18px 0; color:#5f6368; font-size:14px; display:flex; justify-content:space-between; gap:12px;">
+                        <span id="peerFeedbackStatusText">AI督导正在生成反馈，请稍候。</span>
+                        <span id="peerFeedbackTimer">阅读剩余 05:00</span>
+                    </div>`}
                     <div id="supFeedbackLoading" style="text-align:center; padding:50px;">
-                        <div style="display:inline-block; width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #1a73e8; border-radius:50%; animation:spin 1s linear infinite;"></div>
+                        <div style="display:inline-block; width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #555; border-radius:50%; animation:spin 1s linear infinite;"></div>
                         <p style="color:#666; margin-top:20px;">${mode === 'peer' ? '等待来访者扮演人提交反馈...' : '督导正在深度阅读并分析您的对话记录...'}</p>
                     </div>
 
@@ -530,6 +536,10 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
             clearInterval(window.peerFeedbackCountdownTimer);
             window.peerFeedbackCountdownTimer = null;
         }
+        if (window.supervisorReadCountdownTimer) {
+            clearInterval(window.supervisorReadCountdownTimer);
+            window.supervisorReadCountdownTimer = null;
+        }
         const overlay = document.getElementById('supFeedbackOverlay');
         if (overlay) overlay.remove();
         proceedToNextStage();
@@ -541,9 +551,37 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
         const loadingDiv = document.getElementById('supFeedbackLoading');
         const btnContainer = document.getElementById('supFeedbackBtnContainer');
         const timerEl = document.getElementById('peerFeedbackTimer');
+        const statusEl = document.getElementById('peerFeedbackStatusText');
         let lastSubmittedAt = '';
+        let hasFeedbackShown = false;
+        let reviewCompleteTriggered = false;
+        let waitSeconds = 5 * 60;
+        let readSeconds = 5 * 60;
+        let waitTimedOut = false;
 
         const roundNo = data.roundNo || (experimentData.controlPairing && experimentData.controlPairing.activeRoundNo) || 1;
+        const markReviewAndProceed = async () => {
+            if (reviewCompleteTriggered) {
+                return;
+            }
+            reviewCompleteTriggered = true;
+            if (window.peerFeedbackCountdownTimer) {
+                clearInterval(window.peerFeedbackCountdownTimer);
+                window.peerFeedbackCountdownTimer = null;
+            }
+            if (window.peerFeedbackPollingInterval) {
+                clearInterval(window.peerFeedbackPollingInterval);
+                window.peerFeedbackPollingInterval = null;
+            }
+            try {
+                await markPairedReviewComplete(roundNo);
+            } catch (error) {
+                console.warn('[PEER_FEEDBACK] 标记阅读完成失败:', error);
+            }
+            cleanupAndProceed();
+        };
+        document.getElementById('closeFeedbackBtn').onclick = markReviewAndProceed;
+
         const pollPeerFeedback = async () => {
             try {
                 const payload = await fetchPairedClientFeedback(roundNo);
@@ -558,21 +596,53 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
                 resultDiv.innerHTML = renderPeerFeedbackHTML(payload.feedback);
                 resultDiv.style.display = 'block';
                 btnContainer.style.display = 'block';
+                if (!hasFeedbackShown) {
+                    hasFeedbackShown = true;
+                    readSeconds = 5 * 60;
+                    if (timerEl) {
+                        timerEl.textContent = '共同阅读剩余 05:00';
+                    }
+                }
+                if (statusEl) {
+                    statusEl.textContent = '来访者已提交反馈，请认真阅读。';
+                }
             } catch (error) {
                 loadingDiv.innerHTML = `<p style="color:#e74c3c;">拉取同辈反馈失败：${error.message}</p>`;
             }
         };
 
-        let remainingSeconds = 5 * 60;
+        if (timerEl) {
+            timerEl.textContent = '等待来访者提交反馈...';
+        }
         window.peerFeedbackCountdownTimer = setInterval(() => {
-            remainingSeconds -= 1;
-            if (timerEl) {
-                const min = String(Math.floor(Math.max(remainingSeconds, 0) / 60)).padStart(2, '0');
-                const sec = String(Math.max(remainingSeconds, 0) % 60).padStart(2, '0');
-                timerEl.textContent = `剩余查看时间 ${min}:${sec}`;
+            if (hasFeedbackShown) {
+                readSeconds -= 1;
+                if (timerEl) {
+                    const min = String(Math.floor(Math.max(readSeconds, 0) / 60)).padStart(2, '0');
+                    const sec = String(Math.max(readSeconds, 0) % 60).padStart(2, '0');
+                    timerEl.textContent = `共同阅读剩余 ${min}:${sec}`;
+                }
+                if (readSeconds <= 0) {
+                    clearInterval(window.peerFeedbackCountdownTimer);
+                    window.peerFeedbackCountdownTimer = null;
+                    markReviewAndProceed();
+                }
+                return;
             }
-            if (remainingSeconds <= 0) {
-                cleanupAndProceed();
+
+            if (waitTimedOut) {
+                return;
+            }
+            waitSeconds -= 1;
+            if (waitSeconds <= 0) {
+                waitTimedOut = true;
+                if (timerEl) {
+                    timerEl.textContent = '等待已超时';
+                }
+                if (statusEl) {
+                    statusEl.textContent = '来访者尚未提交反馈，已到达等待上限，可先继续下一步。';
+                }
+                btnContainer.style.display = 'block';
             }
         }, 1000);
 
@@ -585,12 +655,37 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
         const feedback = await callPracticeFeedbackAPI(data, mode);
         document.getElementById('supFeedbackLoading').style.display = 'none';
         const resultDiv = document.getElementById('supFeedbackResult');
+        const statusEl = document.getElementById('peerFeedbackStatusText');
+        const timerEl = document.getElementById('peerFeedbackTimer');
         resultDiv.innerHTML = feedback
-            .replace(/### (.*)/g, '<h4 style="color:#1a73e8; border-bottom:1px solid #e8f0fe; padding-bottom:5px; margin-top:25px;">$1</h4>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#2c3e50; background:#f0f7ff; padding:0 4px; border-radius:3px;">$1</strong>')
-            .replace(/维度(\d+)：/g, '<div style="display:inline-block; padding:2px 10px; background:#1a73e8; color:white; border-radius:4px; font-size:13px; margin-top:10px;">维度 $1</div>');
+            .replace(/### (.*)/g, '<h4 style="color:#222; border-bottom:1px solid #ddd; padding-bottom:5px; margin-top:25px;">$1</h4>')
+            .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#222; background:#f5f5f5; padding:0 4px; border-radius:3px;">$1</strong>')
+            .replace(/维度(\d+)：/g, '<div style="display:inline-block; padding:2px 10px; background:#444; color:white; border-radius:4px; font-size:13px; margin-top:10px;">维度 $1</div>');
         resultDiv.style.display = 'block';
         document.getElementById('supFeedbackBtnContainer').style.display = 'block';
+        if (statusEl) {
+            statusEl.textContent = 'AI督导已提交反馈，请认真阅读。';
+        }
+        let readSeconds = 5 * 60;
+        if (timerEl) {
+            timerEl.textContent = '阅读剩余 05:00';
+        }
+        if (window.supervisorReadCountdownTimer) {
+            clearInterval(window.supervisorReadCountdownTimer);
+        }
+        window.supervisorReadCountdownTimer = setInterval(() => {
+            readSeconds -= 1;
+            if (timerEl) {
+                const min = String(Math.floor(Math.max(readSeconds, 0) / 60)).padStart(2, '0');
+                const sec = String(Math.max(readSeconds, 0) % 60).padStart(2, '0');
+                timerEl.textContent = `阅读剩余 ${min}:${sec}`;
+            }
+            if (readSeconds <= 0) {
+                clearInterval(window.supervisorReadCountdownTimer);
+                window.supervisorReadCountdownTimer = null;
+                cleanupAndProceed();
+            }
+        }, 1000);
     } catch (e) {
         document.getElementById('supFeedbackLoading').innerHTML = "<p style='color:red;'>抱歉，报告生成遇到一点小问题，请点击下方按钮继续。</p>";
         document.getElementById('supFeedbackBtnContainer').style.display = 'block';
@@ -617,13 +712,14 @@ async function callPracticeFeedbackAPI(data, mode = 'supervisor') {
     ${chatLog}
     
     请根据哥伦比亚自杀严重程度评估标准（C-SSRS）和心理咨询原则进行点评：
-    1. 评估准确性：咨询师定级为“${data.level}”是否准确？（请注意：如果对话轮数极少，请指出咨询师在信息不足时过早定级的风险）。
-    2. 维度评估（请按“做得好的地方”和“提升建议”两个子模块撰写）：
+    1. 维度评估：
        - 维度1：建立关系（共情是否到位、是否有效降低了阻抗）
        - 维度2：风险因素探索（是否捕捉到关键危机信号）
        - 维度3：保护性因素探索（是否讨论了支持系统或牵挂）
-       - 维度4：C-SSRS 规范性（是否询问了意念、计划、意图和行为）
-    3. 综合总结：指出 1-2 个最核心的改进点。
+       - 维度4：综合建议（仅给出 1-2 条优先改进建议，不要拆分“做得好的地方/需要提升的地方”）
+    2. 输出格式要求：
+       - 维度1-3：每个维度仅包含“做得好的地方”“需要提升的地方”两项。
+       - 维度4：只保留一个“综合建议”段落。
     
     要求：语气专业、严谨且具有指导意义。`;
 

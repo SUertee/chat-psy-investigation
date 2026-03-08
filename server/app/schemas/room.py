@@ -26,6 +26,21 @@ class RoomAdvanceRequest(BaseModel):
     participant_id: str = Field(min_length=1, max_length=128)
 
 
+class RoomSyncStartRequest(BaseModel):
+    participant_id: str = Field(min_length=1, max_length=128)
+    round_no: int = Field(ge=1, le=2)
+
+
+class RoomSyncStartResponse(BaseModel):
+    room_id: str
+    round_no: int
+    status: str
+    countdown_seconds: int
+    start_at: str | None = None
+    server_now: str
+    remaining_ms: int | None = None
+
+
 class RoomAdvanceResponse(BaseModel):
     room_id: str
     current_round: int
@@ -60,13 +75,25 @@ class RoomEndRoundResponse(BaseModel):
 class RoomClientFeedbackRequest(BaseModel):
     participant_id: str = Field(min_length=1, max_length=128)
     round_no: int = Field(ge=1, le=2)
-    relationship_feedback: str = Field(min_length=1, max_length=4000)
-    risk_exploration_feedback: str = Field(min_length=1, max_length=4000)
-    protective_factor_feedback: str = Field(min_length=1, max_length=4000)
+    relationship_good: str = Field(min_length=1, max_length=4000)
+    relationship_improve: str = Field(min_length=1, max_length=4000)
+    risk_good: str = Field(min_length=1, max_length=4000)
+    risk_improve: str = Field(min_length=1, max_length=4000)
+    protective_good: str = Field(min_length=1, max_length=4000)
+    protective_improve: str = Field(min_length=1, max_length=4000)
     overall_suggestion: str = Field(min_length=1, max_length=4000)
-    empathy_score: int = Field(ge=1, le=5)
-    continue_intent: str = Field(min_length=1, max_length=32)
-    notes: str = Field(min_length=1, max_length=4000)
+
+
+class RoomReviewCompleteRequest(BaseModel):
+    participant_id: str = Field(min_length=1, max_length=128)
+    round_no: int = Field(ge=1, le=2)
+
+
+class RoomReviewCompleteResponse(BaseModel):
+    room_id: str
+    round_no: int
+    review_ready: bool
+    reviewed_by: str
 
 
 class RoomClientFeedbackViewRequest(BaseModel):
@@ -80,3 +107,4 @@ class RoomClientFeedbackResponse(BaseModel):
     submitted: bool
     submitted_at: str | None = None
     feedback: dict | None = None
+    counselor_review_ready: bool = False

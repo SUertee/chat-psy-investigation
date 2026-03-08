@@ -23,7 +23,7 @@
         }
         
         .jspsych-content {
-            max-width: 800px;
+            max-width: min(1320px, 96vw);
             margin: 0 auto;
             background: white;
             padding: 20px;
@@ -281,8 +281,6 @@
     <script src="../src/app/timeline.js"></script>
     <script src="../src/app/main.js"></script>
 
-    <button class="finish-button" id="finishButton" style="display: none;" onclick="finishStage()">
-    我已完成危机评估，<br>结束此阶段
-    </button>
+    <button class="finish-button" id="finishButton" style="display: none;" onclick="finishStage()">我已完成风险评估，结束此阶段</button>
 </body>
 </html>

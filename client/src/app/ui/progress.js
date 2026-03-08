@@ -209,12 +209,16 @@ function hideCountdown() {
 function showFinishButton() {
     const btn = document.getElementById('finishButton');
     if (btn) {
+        btn.textContent = '我已完成风险评估，结束此阶段';
         btn.style.display = 'block';
     } else {
         // 如果找不到按钮，尝试在 500ms 后重新查找一次
         setTimeout(() => {
             const retryBtn = document.getElementById('finishButton');
-            if (retryBtn) retryBtn.style.display = 'block';
+            if (retryBtn) {
+                retryBtn.textContent = '我已完成风险评估，结束此阶段';
+                retryBtn.style.display = 'block';
+            }
         }, 500);
     }
 }

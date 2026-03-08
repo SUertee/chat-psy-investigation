@@ -131,15 +131,12 @@ function startExperiment() {
     // --- 阶段 6：第二次练习 (结束 85%) ---
     timeline.push(createSecondPracticePromptTrial());
     timeline.push(createSecondPracticeTrial());
-    timeline.push(createCrisisAssessmentTrial());
 
     // 【修复】更新进度 -> 85%
     timeline.push(createProgressNode(85));
 
-    // --- 阶段 7：AI督导反馈 (结束 90%) ---
-    timeline.push(createAISupervisorTrial());
-    
-    // (AI督导反馈的 90% 我们已经在 createAISupervisorTrial 的 on_load 里加过了，这里可以不加，或者加一个保险)
+    // --- 阶段 7：进度推进 (结束 90%) ---
+    // 注意：风险评估弹窗 + AI督导反馈已在第二次练习内部完成，这里不再重复追加独立页面
     timeline.push(createProgressNode(90));
 
     // --- 阶段 8：最终问卷 (结束 100%) ---

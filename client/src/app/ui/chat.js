@@ -114,15 +114,15 @@ function createChatInterface() {
             gap: 16px;
             align-items: stretch;
             justify-content: center;
-            max-width: 1200px;
+            max-width: min(1520px, 96vw);
             margin: 0 auto;
-            padding: 0 12px;
+            padding: 0 8px;
         }
 
         /* 1. 聊天主窗口：居中、阴影、圆角 */
         .chat-window {
-            width: min(850px, 100%);
-            height: 700px;
+            width: min(980px, 92vw);
+            height: min(740px, 84vh);
             max-height: 90vh;
             background-color: #f5f5f5;
             margin: 0 auto;
@@ -138,7 +138,7 @@ function createChatInterface() {
 
         .chat-profile-panel {
             width: 320px;
-            height: 700px;
+            height: min(740px, 84vh);
             max-height: 90vh;
             overflow: auto;
             background: linear-gradient(180deg, #fffaf1 0%, #fff 100%);
@@ -164,16 +164,17 @@ function createChatInterface() {
             font-size: 13px;
         }
 
-        @media (max-width: 1180px) {
+        @media (max-width: 1380px) {
             .chat-layout {
                 flex-direction: column;
                 align-items: center;
             }
             .chat-window {
-                height: min(700px, 76vh);
+                width: min(980px, 92vw);
+                height: min(740px, 78vh);
             }
             .chat-profile-panel {
-                width: min(850px, 100%);
+                width: min(980px, 92vw);
                 height: auto;
                 max-height: 28vh;
             }
@@ -394,6 +395,9 @@ function createChatInterface() {
 }
 
 function initializeChat(promptKey) {
+    // 记录当前 AI 练习所用的 prompt，用于后续正确映射复盘档案类型(P1/P2/P3)
+    experimentData.currentPracticePromptKey = promptKey || '';
+
     // 1. [修复] 清空内存中的聊天历史数据！！！
     // 否则练习二会带上前一个练习的记录，导致 AI 角色混乱
     experimentData.chatHistory = []; 
