@@ -84,7 +84,7 @@ function startControlChatDebugExperiment() {
     jsPsych.run(timeline);
 }
 
-function startExperiment() {
+async function startExperiment() {
     if (isControlChatDebugMode()) {
         startControlChatDebugExperiment();
         return;
@@ -107,7 +107,7 @@ function startExperiment() {
     
     // --- 阶段 1：知情同意与分组 ---
     timeline.push(createConsentTrial());
-    performRandomGrouping(); 
+    await performRandomGrouping();
     timeline.push(createGroupingTrial());
 
     timeline.push(createProcedureInstructionTrial());

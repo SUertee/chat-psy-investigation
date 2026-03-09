@@ -151,10 +151,50 @@ function createProcedureInstructionTrial() {
     };
 }
 
-function performRandomGrouping() {
+async function assignGroupBySequenceCC2E1() {
+    const base = (EXPERIMENT_CONFIG.BACKEND_BASE_URL || '').replace(/\/$/, '');
+    if (!base) {
+        throw new Error('BACKEND_BASE_URL 未配置，无法按顺序分组。');
+    }
+    const response = await fetch(`${base}/grouping/assign`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ strategy: 'cc2e1' })
+    });
+    if (!response.ok) {
+        let detail = response.statusText;
+        try {
+            const payload = await response.json();
+            detail = payload.detail || payload.error || JSON.stringify(payload);
+        } catch (error) {
+            // Ignore parse error and keep status text.
+        }
+        throw new Error(detail || '分组接口调用失败');
+    }
+    return response.json();
+}
+
+async function performRandomGrouping() {
     // 检查是否有强制分组设置
-    if (typeof GROUP_MODE !== 'undefined' && GROUP_MODE !== 'random') {
+    if (typeof GROUP_MODE !== 'undefined' && GROUP_MODE !== 'random' && GROUP_MODE !== 'cc2e1') {
         experimentData.group = GROUP_MODE;
+    } else if (GROUP_MODE === 'cc2e1') {
+        try {
+            const assigned = await assignGroupBySequenceCC2E1();
+            experimentData.group = assigned.group;
+            experimentData.responses.grouping_sequence = assigned;
+            experimentData.timestamps.grouping_sequence_assigned = getCurrentTimestamp();
+        } catch (error) {
+            console.warn('[GROUPING] 顺序分组失败，回退随机分组:', error);
+            experimentData.group = Math.random() < 0.5 ? 'experimental' : 'control';
+            experimentData.responses.grouping_sequence = {
+                strategy: 'cc2e1',
+                fallback: 'random',
+                reason: String((error && error.message) || error || '')
+            };
+        }
     } else {
         // 执行 1:1 随机分组
         experimentData.group = Math.random() < 0.5 ? 'experimental' : 'control';

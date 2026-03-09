@@ -43,6 +43,24 @@ class MemoryStore:
     rooms: dict[str, dict[str, Any]] = field(default_factory=dict)
     messages: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     next_message_id: int = 1
+    group_assign_counter: int = 0
+
+    def assign_group(self, strategy: str = "cc2e1") -> dict[str, Any]:
+        normalized = (strategy or "cc2e1").strip().lower()
+        if normalized != "cc2e1":
+            raise ValueError("unsupported grouping strategy")
+
+        self.group_assign_counter += 1
+        seq = self.group_assign_counter
+        slot = (seq - 1) % 3
+        group = "control" if slot in (0, 1) else "experimental"
+        return {
+            "group": group,
+            "sequence_no": seq,
+            "strategy": normalized,
+            "pattern": "control,control,experimental",
+            "assigned_at": _now_iso(),
+        }
 
     def _ensure_shared_read_window(self, room: dict[str, Any], round_no: int, now: datetime | None = None) -> None:
         feedback_record = room.get("round_feedbacks", {}).get(round_no)
