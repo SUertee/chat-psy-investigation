@@ -37,7 +37,7 @@
 2. 确保根目录 `index.html` 可以直接访问
 3. 如需配对聊天室，额外启动 `server` 内的 FastAPI 服务
 
-#### 方法六：Docker 一键运行（推荐服务器）
+#### 方法六：Docker 单容器运行（推荐服务器）
 
 在项目根目录执行：
 
@@ -45,7 +45,7 @@
 docker compose up -d --build
 ```
 
-访问地址：
+访问地址（单容器对外端口 9000）：
 
 - 前端实验页：`http://127.0.0.1:9000/client/public/index.html`
 - 后端健康检查：`http://127.0.0.1:9000/api/health`

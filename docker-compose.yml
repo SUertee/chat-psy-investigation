@@ -1,24 +1,11 @@
-version: "3.9"
-
 services:
-  backend:
+  app:
     build:
       context: .
-      dockerfile: Dockerfile.backend
-    container_name: ai-psy-backend
+      dockerfile: Dockerfile.single
+    container_name: ai-psy-app
     env_file:
       - server/.env
-    restart: unless-stopped
-    expose:
-      - "8001"
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: ai-psy-frontend
-    depends_on:
-      - backend
     ports:
-      - "9000:80"
+      - "9000:9000"
     restart: unless-stopped
