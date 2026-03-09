@@ -47,8 +47,8 @@ docker compose up -d --build
 
 访问地址：
 
-- 前端实验页：`http://127.0.0.1:8080/client/public/index.html`
-- 后端健康检查：`http://127.0.0.1:8080/api/health`
+- 前端实验页：`http://127.0.0.1:9000/client/public/index.html`
+- 后端健康检查：`http://127.0.0.1:9000/api/health`
 
 停止服务：
 
