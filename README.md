@@ -12,21 +12,21 @@
 
 1. 在项目根目录启动静态服务：
    ```bash
-   ./scripts/run-client.sh 8002
+   ./scripts/run-client.sh 9000
    ```
 2. 在浏览器中访问：
-   - 测试入口：`http://127.0.0.1:8002/client/public/test.html`
-   - 实验入口：`http://127.0.0.1:8002/client/public/index.html`
+   - 测试入口：`http://127.0.0.1:9000/client/public/test.html`
+   - 实验入口：`http://127.0.0.1:9000/client/public/index.html`
 
 #### 方法二：同时启用配对后端
 
-1. 保持前端静态服务运行（推荐 8002）
-2. 启动 FastAPI 后端（默认 8001）：
+1. 保持前端静态服务运行（推荐 9000）
+2. 启动 FastAPI 后端（默认 9001）：
    ```bash
    ./scripts/run-server.sh
    ```
 3. 对照组配对聊天室和 AI 代理接口都由 `server/` 提供
-4. 健康检查地址：`http://127.0.0.1:8001/api/health`
+4. 健康检查地址：`http://127.0.0.1:9001/api/health`
 
 #### 方法三：部署到服务器
 
@@ -37,7 +37,7 @@
 2. 确保根目录 `index.html` 可以直接访问
 3. 如需配对聊天室，额外启动 `server` 内的 FastAPI 服务
 
-#### 方法六：Docker 单容器运行（推荐服务器）
+#### 方法六：Docker 前后端分离运行（推荐服务器）
 
 在项目根目录执行：
 
@@ -45,10 +45,11 @@
 docker compose up -d --build
 ```
 
-访问地址（单容器对外端口 9000）：
+访问地址（前端 9000，后端 9001）：
 
 - 前端实验页：`http://127.0.0.1:9000/client/public/index.html`
-- 后端健康检查：`http://127.0.0.1:9000/api/health`
+- 前端代理健康检查：`http://127.0.0.1:9000/api/health`
+- 后端直连健康检查：`http://127.0.0.1:9001/api/health`
 
 停止服务：
 
@@ -63,10 +64,10 @@ docker compose down
 前端（项目根目录）：
 
 ```bash
-python3 -m http.server 8002
+python3 -m http.server 9000
 ```
 
-浏览器访问：`http://127.0.0.1:8002/client/public/index.html`
+浏览器访问：`http://127.0.0.1:9000/client/public/index.html`
 
 后端（新开终端，进入 `server/` 目录）：
 
@@ -74,17 +75,17 @@ python3 -m http.server 8002
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python3 -m uvicorn app.main:app --reload --port 8001
+python3 -m uvicorn app.main:app --reload --port 9001
 ```
 
-后端地址：`http://127.0.0.1:8001`（接口前缀 `/api`）
+后端地址：`http://127.0.0.1:9001`（接口前缀 `/api`）
 
 #### 方法五：Windows PowerShell 启动
 
 前端（项目根目录）：
 
 ```powershell
-py -m http.server 8002
+py -m http.server 9000
 ```
 
 后端（进入 `server` 目录）：
@@ -93,7 +94,7 @@ py -m http.server 8002
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-py -m uvicorn app.main:app --reload --port 8001
+py -m uvicorn app.main:app --reload --port 9001
 ```
 
 ### 2. 文件结构

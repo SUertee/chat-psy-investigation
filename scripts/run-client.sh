@@ -2,7 +2,7 @@
 
 set -e
 
-PORT=${1:-8002}
+PORT=${1:-9000}
 
 echo "Starting client on http://127.0.0.1:${PORT}"
 cd "$(dirname "$0")/.."

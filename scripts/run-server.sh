@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-PORT=${1:-8001}
+PORT=${1:-9001}
 
 echo "Starting FastAPI server on http://127.0.0.1:${PORT}"
 cd "$(dirname "$0")/../server"
