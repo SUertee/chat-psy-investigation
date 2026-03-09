@@ -1,0 +1,9 @@
+.git
+.gitignore
+.DS_Store
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.venv
+backups
+client/public/result

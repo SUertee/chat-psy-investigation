@@ -55,6 +55,9 @@ function injectQuestionnaireStyles() {
         .q-card:hover {
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
+        .q-card.hidden-by-condition {
+            display: none;
+        }
         .q-label {
             display: block;
             font-weight: 600;
@@ -218,10 +221,14 @@ function injectQuestionnaireStyles() {
 
 // 4. 单题渲染器 (升级版：支持反馈Likert和文本域)
 function generateQuestionItem(q) {
-    let html = `<div class="q-card" id="card-${q.id}">`;
+    const visibleIf = q.visible_if || null;
+    const visibilityAttrs = visibleIf && visibleIf.question
+        ? ` data-visible-if-question="${visibleIf.question}" data-visible-if-value="${String(visibleIf.equals ?? '')}"`
+        : '';
+    let html = `<div class="q-card" id="card-${q.id}"${visibilityAttrs}>`;
     
     // 标签 (情境题不需要常规标签)
-    if (q.type !== 'scenario_rating') {
+    if (q.type !== 'scenario_rating' && q.type !== 'info') {
         html += `<label class="q-label">${q.text} ${q.required ? '<span style="color:red">*</span>' : ''}</label>`;
     }
 
@@ -229,6 +236,10 @@ function generateQuestionItem(q) {
     switch (q.type) {
         case 'number':
             html += `<input type="number" name="${q.id}" ${q.required ? 'required' : ''} placeholder="请输入数字...">`;
+            break;
+
+        case 'text':
+            html += `<input type="text" name="${q.id}" ${q.required ? 'required' : ''} placeholder="${q.placeholder || '请输入...'}">`;
             break;
             
         case 'radio': // 是/否，男/女
@@ -284,11 +295,17 @@ function generateQuestionItem(q) {
 
         // >>> 新增：Textarea (定性反馈) <<<
         case 'textarea':
+            const textareaPlaceholder = q.placeholder || '请输入您的回答...';
+            const minLengthAttr = Number.isFinite(q.minLength) ? ` minlength="${q.minLength}"` : '';
             html += `
                 <textarea name="${q.id}" rows="4" 
                           style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-family:inherit;" 
-                          placeholder="请输入您的回答（不少于20字）..." ${q.required ? 'required minlength="20"' : ''}></textarea>
+                          placeholder="${textareaPlaceholder}" ${q.required ? 'required' : ''}${minLengthAttr}></textarea>
             `;
+            break;
+
+        case 'info':
+            html += `<div style="line-height:1.75; color:#2c3e50; background:#f8fbff; border:1px solid #dbeafe; border-radius:8px; padding:14px 16px;">${q.text || ''}</div>`;
             break;
             
         case 'scenario_rating': // 复杂情境题
@@ -330,6 +347,12 @@ function createQuestionnaireTrial(phase, questionnaireConfig) {
             if (questionnaireConfig.pages) {
                 initMultiPageLogic();
             }
+
+            if (phase === 'pretest' && typeof DEBUG_MODE !== 'undefined' && DEBUG_MODE) {
+                setTimeout(() => {
+                    applyPretestDebugDefaults();
+                }, 0);
+            }
         },
         on_finish: function(data) {
             experimentData.responses[phase] = data.response;
@@ -347,6 +370,29 @@ function createQuestionnaireTrial(phase, questionnaireConfig) {
             }
         }
     };
+}
+
+function applyPretestDebugDefaults() {
+    const ageInput = document.querySelector('input[name="pt_age"]');
+    if (ageInput && !ageInput.value) {
+        ageInput.value = '20';
+    }
+
+    const genderChoices = document.querySelectorAll('input[name="pt_gender"]');
+    if (!genderChoices || !genderChoices.length) {
+        return;
+    }
+
+    const hasSelected = Array.from(genderChoices).some((item) => item.checked);
+    if (hasSelected) {
+        return;
+    }
+
+    const preferred = Array.from(genderChoices).find((item) => item.value === '女') || genderChoices[0];
+    if (preferred) {
+        preferred.checked = true;
+        preferred.dispatchEvent(new Event('change', { bubbles: true }));
+    }
 }
 
 // 3. 多页 HTML 生成器
@@ -470,7 +516,94 @@ function generateScenarioHTML(q) {
 window.initMultiPageLogic = function() {
     window.currentPage = 0;
     changePage(0); // 确保初始化时显示第一页
+    initConditionalLogic();
+    bindTestNextPageShortcut();
 };
+
+function bindTestNextPageShortcut() {
+    if (!(typeof DEBUG_MODE !== 'undefined' && DEBUG_MODE)) {
+        return;
+    }
+
+    if (window.__surveyShiftNBound) {
+        return;
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (!(event.shiftKey && (event.key === 'N' || event.key === 'n'))) {
+            return;
+        }
+
+        const activePage = document.querySelector('.survey-page.active');
+        if (!activePage) {
+            return;
+        }
+
+        const actionBtn = activePage.querySelector('.btn-next, .btn-submit');
+        if (!actionBtn || actionBtn.disabled) {
+            return;
+        }
+
+        event.preventDefault();
+        actionBtn.click();
+    });
+
+    window.__surveyShiftNBound = true;
+}
+
+function setCardVisibility(card, shouldShow) {
+    const fields = card.querySelectorAll('input, textarea, select');
+    if (shouldShow) {
+        card.classList.remove('hidden-by-condition');
+        fields.forEach((field) => {
+            field.disabled = false;
+            if (field.dataset.originalRequired === 'true') {
+                field.required = true;
+            }
+        });
+        return;
+    }
+    card.classList.add('hidden-by-condition');
+    fields.forEach((field) => {
+        if (field.required) {
+            field.dataset.originalRequired = 'true';
+        } else if (!field.dataset.originalRequired) {
+            field.dataset.originalRequired = 'false';
+        }
+        field.required = false;
+        field.disabled = true;
+        if (field.type === 'radio' || field.type === 'checkbox') {
+            field.checked = false;
+        } else {
+            field.value = '';
+        }
+    });
+}
+
+window.updateConditionalQuestions = function() {
+    const cards = document.querySelectorAll('.q-card[data-visible-if-question]');
+    cards.forEach((card) => {
+        const depQuestion = card.getAttribute('data-visible-if-question');
+        const expectedValue = card.getAttribute('data-visible-if-value');
+        const checked = document.querySelector(`input[name="${depQuestion}"]:checked`);
+        const actualValue = checked ? checked.value : '';
+        const shouldShow = actualValue === expectedValue;
+        setCardVisibility(card, shouldShow);
+    });
+};
+
+function initConditionalLogic() {
+    const cards = document.querySelectorAll('.q-card[data-visible-if-question]');
+    if (!cards.length) return;
+    cards.forEach((card) => setCardVisibility(card, false));
+    const root = document.getElementById('survey-root');
+    if (root) {
+        root.addEventListener('change', function() {
+            window.updateConditionalQuestions();
+        });
+    }
+    window.updateConditionalQuestions();
+}
 
 window.changePage = function(pageIndex) {
     const pages = document.querySelectorAll('.survey-page');
@@ -495,7 +628,7 @@ window.validateAndNext = function(currentIndex) {
     }
 
     const currentDiv = document.getElementById(`page-${currentIndex}`);
-    const inputs = currentDiv.querySelectorAll('input[required], textarea[required], select[required]');
+    const inputs = currentDiv.querySelectorAll('.q-card:not(.hidden-by-condition) input[required], .q-card:not(.hidden-by-condition) textarea[required], .q-card:not(.hidden-by-condition) select[required]');
     let allValid = true;
     let firstError = null;
 

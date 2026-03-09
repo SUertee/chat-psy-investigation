@@ -31,8 +31,8 @@ function createVideoTrial() {
         type: jsPsychHtmlButtonResponse,
         stimulus: `
             <div class="video-container">
-                <div style="position: relative; width: 640px; height: 360px; margin: 0 auto;">
-                    <video width="640" height="360" id="trainingVideo"
+                <div style="position: relative; width: min(1100px, 94vw); margin: 0 auto; background: #000; border-radius: 12px; overflow: hidden;">
+                    <video id="trainingVideo" style="display:block; width:100%; height:auto; max-height:72vh; background:#000; object-fit:contain;"
                             oncontextmenu="return false;" 
                             disablepictureinpicture>
                         <source src="${EXPERIMENT_CONFIG.TRAINING_VIDEO_PATH}" type="video/mp4">
@@ -397,8 +397,49 @@ function createControlConnectionBriefTrial(promptKey) {
             const loadingBlock = document.getElementById('connectionLoadingBlock');
             const continueBtn = document.getElementById('connectionContinueBtn');
             const successBlock = document.getElementById('connectionSuccessBlock');
+            const waitTimeoutMs = EXPERIMENT_CONFIG.MATCH_TIMEOUT_MS || 300000;
+            let waitDeadlineMs = Date.now() + waitTimeoutMs;
+            let waitTimer = null;
 
-            loadingBlock.innerHTML = '<p style="margin: 0;"><strong>正在为您进行配对……，请稍候...</strong></p>';
+            const formatRemain = (remainMs) => {
+                const totalSeconds = Math.max(0, Math.ceil(remainMs / 1000));
+                const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+                const seconds = String(totalSeconds % 60).padStart(2, '0');
+                return `${minutes}:${seconds}`;
+            };
+
+            const renderLoadingBlock = (text) => {
+                loadingBlock.innerHTML = `
+                    <p style="margin: 0;"><strong>${text}</strong></p>
+                    <p style="margin: 8px 0 0 0; color: #d35400;">
+                        当前等待倒计时：<strong id="connectionWaitTimer">${formatRemain(waitDeadlineMs - Date.now())}</strong>
+                    </p>
+                `;
+            };
+
+            const startWaitTimer = () => {
+                if (waitTimer) {
+                    clearInterval(waitTimer);
+                    waitTimer = null;
+                }
+                const tick = () => {
+                    const node = document.getElementById('connectionWaitTimer');
+                    if (!node) return;
+                    node.textContent = formatRemain(waitDeadlineMs - Date.now());
+                };
+                tick();
+                waitTimer = setInterval(tick, 1000);
+            };
+
+            const stopWaitTimer = () => {
+                if (waitTimer) {
+                    clearInterval(waitTimer);
+                    waitTimer = null;
+                }
+            };
+
+            renderLoadingBlock('正在为您进行配对……，请稍候...');
+            startWaitTimer();
             if (continueBtn) {
                 continueBtn.style.display = 'none';
             }
@@ -435,10 +476,47 @@ function createControlConnectionBriefTrial(promptKey) {
 
             const connectAndRender = async () => {
                 successBlock.style.display = 'none';
+                if (experimentData.controlPairing) {
+                    experimentData.controlPairing.timeoutFallback = false;
+                    experimentData.controlPairing.timeoutFallbackPromptKey = '';
+                    experimentData.controlPairing.currentRouteMode = 'paired';
+                }
+                waitDeadlineMs = Date.now() + waitTimeoutMs;
+                renderLoadingBlock('正在为您进行配对……，请稍候...');
+                startWaitTimer();
+                if (continueBtn) {
+                    continueBtn.style.display = 'none';
+                }
 
                 try {
                     const pairing = await preparePairedChatSession(promptKey);
+                    if (pairing && pairing.fallbackToExperimental) {
+                        stopWaitTimer();
+                        if (experimentData.controlPairing) {
+                            experimentData.controlPairing.currentRouteMode = 'ai';
+                        }
+                        const waitedSeconds = Math.floor((pairing.waitedMs || 300000) / 1000);
+                        successBlock.innerHTML = `
+                            <p style="margin: 0;"><strong>连接等待超时，系统将继续下一阶段。</strong></p>
+                            <p style="margin: 6px 0 0 0;">等待时长：约 ${waitedSeconds} 秒</p>
+                            <p style="margin: 2px 0 0 0;">请点击下方按钮继续实验。</p>
+                        `;
+                        successBlock.style.display = 'block';
+                        if (continueBtn) {
+                            continueBtn.style.display = 'inline-block';
+                            continueBtn.disabled = false;
+                            continueBtn.textContent = '继续实验';
+                            continueBtn.style.backgroundColor = '#07c160';
+                            continueBtn.style.cursor = 'pointer';
+                            continueBtn.onclick = function() {
+                                jsPsych.finishTrial();
+                            };
+                        }
+                        return;
+                    }
                     const { roundNo, isCounselor } = pairing;
+                    // 已配对成功后，不再展示“等待配对倒计时”
+                    loadingBlock.innerHTML = '<p style="margin: 0; color:#666;"><strong>已配对成功，正在进行进入会话前的同步准备...</strong></p>';
                     if (isCounselor) {
                         successBlock.innerHTML = getCounselorInstructionHTML(roundNo, '来访者：由真人搭档扮演');
                     } else {
@@ -479,9 +557,16 @@ function createControlConnectionBriefTrial(promptKey) {
                     }
 
                     if (!syncResult || syncResult.status !== 'ready' || !syncResult.start_at || !syncResult.server_now) {
-                        throw new Error('同步进入会话超时，请重试。');
+                        try {
+                            await leavePairedRoom('sync_timeout');
+                        } catch (leaveError) {
+                            console.warn('[PAIRED_CHAT] 同步超时后释放房间失败:', leaveError);
+                        }
+                        stopWaitTimer();
+                        throw new Error('等待另一位参与者进入准备页超时，已重置匹配。请点击“重试连接”等待下一位参与者。');
                     }
 
+                    stopWaitTimer();
                     beginSyncedEnterCountdown(syncResult);
                 } catch (error) {
                     console.error('[PAIRED_CHAT] 配对预连接失败:', error);
@@ -545,8 +630,23 @@ function createPracticeTimeline(promptKey, startNodeId) {
                 type: jsPsychHtmlButtonResponse,
                 stimulus: createChatInterface,
                 choices: [],
+                conditional_function: function() {
+                    return experimentData.group === 'control';
+                },
                 on_load: function() {
                     experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
+                    const routeMode = (experimentData.controlPairing && experimentData.controlPairing.currentRouteMode) || 'paired';
+                    if (routeMode === 'ai') {
+                        if (typeof switchControlParticipantToExperimentalFlow === 'function') {
+                            switchControlParticipantToExperimentalFlow('match_timeout');
+                        }
+                        experimentData.chatMode = 'ai';
+                        experimentData.chatHistory = [];
+                        initializeChat(promptKey);
+                        startCountdown();
+                        showFinishButton();
+                        return;
+                    }
 
                     initializePairedChat(promptKey, { prepared: true })
                         .then(() => {
@@ -555,17 +655,30 @@ function createPracticeTimeline(promptKey, startNodeId) {
                         })
                         .catch(error => {
                             console.error('[PAIRED_CHAT] 初始化失败:', error);
-                            alert(`对照组配对失败：${error.message}`);
+                            alert(`连接失败：${error.message}`);
                             jsPsych.finishTrial();
                         });
                 },
                 on_finish: function() {
+                    hideCountdownAndButton();
+                    if (window.countdownTimer) {
+                        clearInterval(window.countdownTimer);
+                        window.countdownTimer = null;
+                    }
+                    hideCountdown();
+                    hideFinishButton();
                     experimentData.timestamps[promptKey + '_end'] = getCurrentTimestamp();
                     if (experimentData.chatHistory.length > 0) {
                         experimentData.allPracticeChats[promptKey] = JSON.parse(JSON.stringify(experimentData.chatHistory));
                     }
-                    hideCountdown();
-                    hideFinishButton();
+                    if (experimentData.controlPairing) {
+                        experimentData.controlPairing.timeoutFallback = false;
+                        experimentData.controlPairing.timeoutFallbackReason = '';
+                        experimentData.controlPairing.timeoutFallbackAt = '';
+                        experimentData.controlPairing.timeoutFallbackPromptKey = '';
+                        experimentData.controlPairing.timeoutFallbackWaitMs = 0;
+                        experimentData.controlPairing.currentRouteMode = 'paired';
+                    }
                 }
             }
         ],
@@ -624,7 +737,7 @@ function startCountdown() {
         
         if (countdownTimeLeft <= 0) {
             clearInterval(window.countdownTimer);
-            finishStage(); 
+            finishStage(true);
         }
     }, 1000);
 }
@@ -718,27 +831,32 @@ function hideFinishButton() {
     if (btn) btn.style.display = 'none';
 }
 
-function finishStage() {
+function finishStage(autoTriggered = false) {
     console.log("正在结束当前阶段...");
 
     if (experimentData.chatMode === 'paired') {
         if (experimentData.controlPairing && experimentData.controlPairing.isCounselor) {
-            const confirmed = window.confirm('确认结束本轮咨询吗？结束后来访者将同步进入反馈填写。');
-            if (!confirmed) {
-                return;
+            if (!autoTriggered) {
+                const confirmed = window.confirm('确认结束本轮咨询吗？结束后来访者将同步进入反馈填写。');
+                if (!confirmed) {
+                    return;
+                }
             }
+            const roundBeforeEnd = experimentData.controlPairing.activeRoundNo || 1;
             const finishBtn = document.getElementById('finishButton');
             if (finishBtn) {
                 finishBtn.disabled = true;
                 finishBtn.style.opacity = '0.6';
-                finishBtn.textContent = '正在结束本轮...';
+                finishBtn.textContent = autoTriggered ? '已到时，正在自动结束本轮...' : '正在结束本轮...';
             }
             setChatComposerEnabled(false);
 
             endPairedRoundByCounselor()
                 .then(() => {
                     hideFinishButton();
-                    showCounselorRecordModal();
+                    runPreFeedbackProbeByRoundNo(roundBeforeEnd, function() {
+                        showCounselorRecordModal();
+                    });
                 })
                 .catch(error => {
                     if (finishBtn) {
@@ -1059,8 +1177,10 @@ function handleModalAssessmentSubmit() {
         }
     }
 
-    // 传递评估数据和修正后的练习类型
-    showSupervisorFeedbackUI(currentAssessment, practiceType);
+    // 先插入 Probe，再进入反馈
+    runPreFeedbackProbeByPromptKey(currentPromptKey, function() {
+        showSupervisorFeedbackUI(currentAssessment, practiceType);
+    });
 }
 
 function showCounselorRecordModal() {
@@ -1164,6 +1284,12 @@ async function submitCounselorRecord(forceSubmit = false) {
     let roundBeforeEnd = experimentData.controlPairing.activeRoundNo || 1;
     experimentData.timestamps[`control_counselor_record_round_${roundBeforeEnd}_end`] = getCurrentTimestamp();
 
+    try {
+        await markPairedCounselorReportSubmitted(roundBeforeEnd);
+    } catch (error) {
+        console.warn('[PEER_FEEDBACK] 标记咨询师评估提交失败:', error);
+    }
+
     const modal = document.getElementById('counselorRecordModal');
     if (modal) modal.remove();
     if (window.counselorRecordWriteTimer) {
@@ -1266,20 +1392,37 @@ function showClientFeedbackModal() {
     }, 1000);
 }
 
-function showClientWaitingOverlay(roundNo, latestFeedback = null) {
+function showClientWaitingOverlay(roundNo, latestFeedbackResponse = null) {
+    const normalizeFeedback = (input) => {
+        if (!input) return null;
+        if (input.feedback && typeof input.feedback === 'object') {
+            return input.feedback;
+        }
+        return input;
+    };
     const existedOverlay = document.getElementById('clientWaitingOverlay');
     if (existedOverlay) {
         const existedFeedbackEl = document.getElementById('clientWaitingFeedbackContent');
-        if (existedFeedbackEl && latestFeedback && typeof renderPeerFeedbackHTML === 'function') {
-            existedFeedbackEl.innerHTML = renderPeerFeedbackHTML(latestFeedback);
+        const normalized = normalizeFeedback(latestFeedbackResponse);
+        if (existedFeedbackEl && normalized && typeof renderPeerFeedbackHTML === 'function') {
+            existedFeedbackEl.innerHTML = renderPeerFeedbackHTML(normalized);
         }
         return;
     }
     window.clientReviewProceeding = false;
 
+    const initialFeedback = normalizeFeedback(latestFeedbackResponse);
     const initialFeedbackHtml = typeof renderPeerFeedbackHTML === 'function'
-        ? renderPeerFeedbackHTML(latestFeedback)
+        ? renderPeerFeedbackHTML(initialFeedback)
         : '<p style="color:#666;">反馈内容加载中...</p>';
+    const activeScenario = (experimentData.controlPairing && experimentData.controlPairing.activeScenario) || 'xiaob_low';
+    const activeProfile = (experimentData.controlPairing && experimentData.controlPairing.activeProfile) || {};
+    const levelText = activeScenario === 'xiaowu_high' ? '高风险' : '低风险';
+    const identityText = activeProfile.identity || '17 岁，高二女生，曾品学兼优';
+    const situationText = activeProfile.situation || '寒假在家，期末考试成绩大幅滑坡，排名退步严重。';
+    const stressHtml = activeProfile.stress || '';
+    const detailHtml = activeProfile.crisisDetail || '';
+
     const html = `
     <div id="clientWaitingOverlay" style="position:fixed; inset:0; z-index:10004; background:rgba(244,246,248,0.98); overflow:auto; font-family:'Microsoft YaHei',sans-serif; padding:22px;">
         <div style="max-width:900px; margin:0 auto; background:#fff; border-radius:15px; box-shadow:0 10px 40px rgba(0,0,0,0.08); overflow:hidden;">
@@ -1287,23 +1430,68 @@ function showClientWaitingOverlay(roundNo, latestFeedback = null) {
                 <h2 style="margin:0; font-size:30px; letter-spacing:1px;">危机评估复盘报告</h2>
             </div>
             <div style="padding:28px;">
-                <h3 style="color:#222; border-left:5px solid #2f80ed; padding-left:15px; margin:0 0 12px 0;">第一部分：共同阅读提示</h3>
-                <div style="margin:0 0 22px 0; color:#5f6368; font-size:15px; display:flex; justify-content:space-between; gap:12px;">
-                    <span id="clientWaitingText">您的反馈已提交，咨询师正在阅读反馈，请耐心等候。</span>
-                    <span id="clientReadTimer" style="color:#ad6800;">共同阅读剩余 05:00</span>
+                <h3 style="color:#222; border-left:5px solid #2f80ed; padding-left:15px; margin:0 0 18px 0;">第一部分：来访者真实档案 (上帝视角)</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+                    <div style="background:#f4f9ff; padding:18px; border-radius:10px; border-top:4px solid #2f80ed;">
+                        <p style="margin:0 0 10px 0;"><strong>🎯 真实危机等级：</strong> ${levelText}</p>
+                        <p style="margin:0 0 10px 0;"><strong>👤 身份设定：</strong> ${identityText}</p>
+                        <p style="margin:0;"><strong>📍 当前处境：</strong> ${situationText}</p>
+                    </div>
+                    <div style="background:#fffaf2; padding:18px; border-radius:10px; border-top:4px solid #f2a154;">
+                        <p style="margin:0 0 8px 0;"><strong>🔥 核心压力来源分析：</strong></p>
+                        ${stressHtml}
+                    </div>
                 </div>
-                <div style="height:1px; background:#eee; margin:16px 0 24px 0;"></div>
+                <p style="font-weight:bold; color:#5f6368; margin:0 0 12px 0;">🔍 详细风险评估标准:</p>
+                <div>${detailHtml}</div>
+
+                <div style="height:1px; background:#eee; margin:24px 0 24px 0;"></div>
                 <h3 style="color:#222; border-left:5px solid #2f80ed; padding-left:15px; margin:0 0 12px 0;">第二部分：您提交的反馈</h3>
+                <div style="margin:0 0 22px 0; color:#5f6368; font-size:15px; display:flex; justify-content:space-between; gap:12px;">
+                    <span id="clientWaitingText">您的反馈已提交，正在等待咨询师提交评估报告。</span>
+                    <span id="clientReadTimer" style="color:#ad6800;">共同阅读待开始</span>
+                </div>
                 <div id="clientWaitingFeedbackContent">${initialFeedbackHtml}</div>
             </div>
         </div>
     </div>`;
     document.body.insertAdjacentHTML('beforeend', html);
 
-    let remainingSeconds = 5 * 60;
+    let sharedReadSeconds = 5 * 60;
+    let syncedDeadlineMs = null;
+    let syncedClockOffsetMs = 0;
     const timerEl = document.getElementById('clientReadTimer');
     const textEl = document.getElementById('clientWaitingText');
     const feedbackEl = document.getElementById('clientWaitingFeedbackContent');
+
+    const getSyncedRemainingSeconds = () => {
+        if (!Number.isFinite(syncedDeadlineMs)) {
+            return null;
+        }
+        const nowServerMs = Date.now() + syncedClockOffsetMs;
+        return Math.max(0, Math.ceil((syncedDeadlineMs - nowServerMs) / 1000));
+    };
+
+    const applySyncedCountdown = (payload) => {
+        if (!payload) {
+            return;
+        }
+        const serverNowMs = Date.parse(payload.server_now);
+        const deadlineMs = Date.parse(payload.read_deadline_at);
+        if (Number.isFinite(serverNowMs) && Number.isFinite(deadlineMs)) {
+            syncedClockOffsetMs = serverNowMs - Date.now();
+            syncedDeadlineMs = deadlineMs;
+            if (textEl) {
+                textEl.textContent = '咨询师已提交评估报告，双方共同阅读中，请耐心等候。';
+            }
+        }
+        const readSecFromServer = Number(payload.shared_read_seconds);
+        if (Number.isFinite(readSecFromServer) && readSecFromServer > 0) {
+            sharedReadSeconds = Math.floor(readSecFromServer);
+        }
+    };
+
+    applySyncedCountdown(latestFeedbackResponse);
 
     if (window.clientReviewWaitTimer) {
         clearInterval(window.clientReviewWaitTimer);
@@ -1312,14 +1500,28 @@ function showClientWaitingOverlay(roundNo, latestFeedback = null) {
         clearInterval(window.clientReviewPollTimer);
     }
 
+    const proceedWithPostFeedbackProbe = () => {
+        runPostFeedbackProbeByRoundNo(roundNo, function() {
+            proceedToNextStage();
+        });
+    };
+
     const tryProceed = async () => {
         if (window.clientReviewProceeding) {
             return;
         }
         try {
             const payload = await fetchPairedClientFeedback(roundNo);
+            applySyncedCountdown(payload);
             if (payload && payload.submitted && payload.feedback && typeof renderPeerFeedbackHTML === 'function' && feedbackEl) {
                 feedbackEl.innerHTML = renderPeerFeedbackHTML(payload.feedback);
+            }
+            if (textEl && payload && !payload.counselor_review_ready) {
+                if (payload.counselor_report_submitted && payload.read_deadline_at) {
+                    textEl.textContent = '咨询师已提交评估报告，双方共同阅读中，请耐心等候。';
+                } else {
+                    textEl.textContent = '您的反馈已提交，正在等待咨询师提交评估报告。';
+                }
             }
             if (payload && payload.counselor_review_ready) {
                 window.clientReviewProceeding = true;
@@ -1329,7 +1531,7 @@ function showClientWaitingOverlay(roundNo, latestFeedback = null) {
                 window.clientReviewPollTimer = null;
                 const overlay = document.getElementById('clientWaitingOverlay');
                 if (overlay) overlay.remove();
-                proceedToNextStage();
+                proceedWithPostFeedbackProbe();
             }
         } catch (error) {
             if (textEl) textEl.textContent = `正在等待搭档阅读（网络波动：${error.message}）`;
@@ -1337,13 +1539,17 @@ function showClientWaitingOverlay(roundNo, latestFeedback = null) {
     };
 
     window.clientReviewWaitTimer = setInterval(() => {
-        remainingSeconds -= 1;
+        let remaining = getSyncedRemainingSeconds();
         if (timerEl) {
-            const mm = String(Math.floor(Math.max(remainingSeconds, 0) / 60)).padStart(2, '0');
-            const ss = String(Math.max(remainingSeconds, 0) % 60).padStart(2, '0');
-            timerEl.textContent = `共同阅读剩余 ${mm}:${ss}`;
+            if (!Number.isFinite(remaining)) {
+                timerEl.textContent = '共同阅读待开始';
+            } else {
+                const mm = String(Math.floor(Math.max(remaining, 0) / 60)).padStart(2, '0');
+                const ss = String(Math.max(remaining, 0) % 60).padStart(2, '0');
+                timerEl.textContent = `共同阅读剩余 ${mm}:${ss}`;
+            }
         }
-        if (remainingSeconds <= 0) {
+        if (Number.isFinite(remaining) && remaining <= 0) {
             if (window.clientReviewProceeding) {
                 return;
             }
@@ -1360,7 +1566,7 @@ function showClientWaitingOverlay(roundNo, latestFeedback = null) {
             setTimeout(() => {
                 const overlay = document.getElementById('clientWaitingOverlay');
                 if (overlay) overlay.remove();
-                proceedToNextStage();
+                proceedWithPostFeedbackProbe();
             }, 800);
         }
     }, 1000);
@@ -1428,14 +1634,20 @@ function submitClientFeedback(forceSubmit = false) {
     experimentData.timestamps[`control_client_feedback_round_${roundNo}_end`] = getCurrentTimestamp();
 
     submitPairedClientFeedback(payload)
-        .then(() => {
+        .then((serverFeedbackResponse) => {
             if (window.clientFeedbackWriteTimer) {
                 clearInterval(window.clientFeedbackWriteTimer);
                 window.clientFeedbackWriteTimer = null;
             }
             const modal = document.getElementById('clientFeedbackModal');
             if (modal) modal.remove();
-            showClientWaitingOverlay(roundNo, payload);
+            const mergedResponse = serverFeedbackResponse && typeof serverFeedbackResponse === 'object'
+                ? {
+                    ...serverFeedbackResponse,
+                    feedback: serverFeedbackResponse.feedback || payload
+                }
+                : { feedback: payload };
+            showClientWaitingOverlay(roundNo, mergedResponse);
         })
         .catch(error => {
             window.clientFeedbackSubmitting = false;

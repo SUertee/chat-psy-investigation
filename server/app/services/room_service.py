@@ -54,6 +54,10 @@ def submit_client_feedback(
     )
 
 
+def mark_counselor_report_submitted(room_id: str, participant_id: str, round_no: int) -> dict:
+    return store.mark_counselor_report_submitted(room_id=room_id, participant_id=participant_id, round_no=round_no)
+
+
 def get_client_feedback(room_id: str, participant_id: str, round_no: int) -> dict:
     return store.get_client_feedback(room_id=room_id, participant_id=participant_id, round_no=round_no)
 

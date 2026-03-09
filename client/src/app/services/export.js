@@ -24,6 +24,23 @@ function saveData() {
             return String(value ?? '');
         }
     };
+    const getProbeResponse = (probeKey) => responses[probeKey] || {};
+    const getProbeValue = (probeKey, field) => {
+        const payload = getProbeResponse(probeKey);
+        if (payload == null || typeof payload !== 'object') {
+            return '';
+        }
+        if (field in payload) {
+            return payload[field];
+        }
+        const questionnaireField = `${probeKey}_${field}`;
+        if (questionnaireField in payload) {
+            return payload[questionnaireField];
+        }
+        return '';
+    };
+    const getProbeSubmittedAt = (probeKey) =>
+        getProbeValue(probeKey, 'submitted_at') || ts[`${probeKey}_end`] || '';
     const buildDurationMap = (timestamps) => {
         const durationMap = {};
         Object.keys(timestamps || {}).forEach((key) => {
@@ -55,6 +72,7 @@ function saveData() {
     addEvent('meta', 'participant', 'start_time', experimentData.startTime || '');
     addEvent('meta', 'participant', 'end_time', ts.end || now);
     addEvent('meta', 'participant', 'group', experimentData.group || '');
+    addEvent('meta', 'participant', 'initial_group', experimentData.initialGroup || '');
     addEvent('meta', 'participant', 'split_half_order', experimentData.splitHalfOrder || '');
     addEvent('meta', 'participant', 'age', experimentData.participantProfile?.age ?? '');
     addEvent('meta', 'participant', 'gender', experimentData.participantProfile?.gender ?? '');
@@ -62,6 +80,16 @@ function saveData() {
     const secondRole = control.secondRoundRole || (experimentData.group === 'experimental' ? '咨询师' : '');
     addEvent('meta', 'group_flow', 'first_round_role', firstRole);
     addEvent('meta', 'group_flow', 'second_round_role', secondRole);
+    addEvent('meta', 'group_flow', 'control_timeout_fallback', control.timeoutFallback ? '1' : '0');
+    addEvent('meta', 'group_flow', 'control_timeout_fallback_reason', control.timeoutFallbackReason || '');
+    addEvent('meta', 'group_flow', 'control_timeout_fallback_at', control.timeoutFallbackAt || '');
+    addEvent('meta', 'group_flow', 'control_timeout_fallback_prompt_key', control.timeoutFallbackPromptKey || '');
+    addEvent('meta', 'group_flow', 'control_timeout_fallback_wait_ms', control.timeoutFallbackWaitMs || '');
+    ['probe1', 'probe2', 'probe3', 'probe4', 'probe5', 'probe6'].forEach((probeKey) => {
+        addEvent('probe', probeKey, 'confidence', getProbeValue(probeKey, 'confidence'));
+        addEvent('probe', probeKey, 'tension', getProbeValue(probeKey, 'tension'));
+        addEvent('probe', probeKey, 'submitted_at', getProbeSubmittedAt(probeKey));
+    });
 
     // 对话记录（AI）
     ['PRACTICE_1', 'PRACTICE_3', 'SECOND_CLIENT'].forEach((key) => {
@@ -103,6 +131,12 @@ function saveData() {
     const wideRow = {
         participant_id: experimentData.participantId || '',
         group: experimentData.group || '',
+        initial_group: experimentData.initialGroup || '',
+        control_timeout_fallback: control.timeoutFallback ? 1 : 0,
+        control_timeout_fallback_reason: control.timeoutFallbackReason || '',
+        control_timeout_fallback_at: control.timeoutFallbackAt || '',
+        control_timeout_fallback_prompt_key: control.timeoutFallbackPromptKey || '',
+        control_timeout_fallback_wait_ms: control.timeoutFallbackWaitMs || '',
         age: experimentData.participantProfile?.age ?? '',
         gender: experimentData.participantProfile?.gender ?? '',
         split_half_order: experimentData.splitHalfOrder || '',
@@ -154,6 +188,25 @@ function saveData() {
         questionnaire3_json: safeStringify(responses.questionnaire3 || {}),
         questionnaire4_json: safeStringify(responses.questionnaire4 || {}),
 
+        probe1_confidence: getProbeValue('probe1', 'confidence'),
+        probe1_tension: getProbeValue('probe1', 'tension'),
+        probe1_submitted_at: getProbeSubmittedAt('probe1'),
+        probe2_confidence: getProbeValue('probe2', 'confidence'),
+        probe2_tension: getProbeValue('probe2', 'tension'),
+        probe2_submitted_at: getProbeSubmittedAt('probe2'),
+        probe3_confidence: getProbeValue('probe3', 'confidence'),
+        probe3_tension: getProbeValue('probe3', 'tension'),
+        probe3_submitted_at: getProbeSubmittedAt('probe3'),
+        probe4_confidence: getProbeValue('probe4', 'confidence'),
+        probe4_tension: getProbeValue('probe4', 'tension'),
+        probe4_submitted_at: getProbeSubmittedAt('probe4'),
+        probe5_confidence: getProbeValue('probe5', 'confidence'),
+        probe5_tension: getProbeValue('probe5', 'tension'),
+        probe5_submitted_at: getProbeSubmittedAt('probe5'),
+        probe6_confidence: getProbeValue('probe6', 'confidence'),
+        probe6_tension: getProbeValue('probe6', 'tension'),
+        probe6_submitted_at: getProbeSubmittedAt('probe6'),
+
         ai_chat_practice1_json: safeStringify((experimentData.allPracticeChats && experimentData.allPracticeChats.PRACTICE_1) || []),
         ai_chat_practice3_json: safeStringify((experimentData.allPracticeChats && experimentData.allPracticeChats.PRACTICE_3) || []),
         ai_chat_second_client_json: safeStringify((experimentData.allPracticeChats && experimentData.allPracticeChats.SECOND_CLIENT) || []),
@@ -189,6 +242,12 @@ function saveData() {
         file_name: `participant_${experimentData.participantId || 'unknown'}_${now.replace(/[^\d]/g, '').slice(0, 14)}.json`,
         meta: {
             group: experimentData.group || '',
+            initial_group: experimentData.initialGroup || '',
+            control_timeout_fallback: !!control.timeoutFallback,
+            control_timeout_fallback_reason: control.timeoutFallbackReason || '',
+            control_timeout_fallback_at: control.timeoutFallbackAt || '',
+            control_timeout_fallback_prompt_key: control.timeoutFallbackPromptKey || '',
+            control_timeout_fallback_wait_ms: control.timeoutFallbackWaitMs || null,
             age: experimentData.participantProfile?.age ?? null,
             gender: experimentData.participantProfile?.gender ?? '',
             split_half_order: experimentData.splitHalfOrder || '',
@@ -250,5 +309,6 @@ function saveData() {
     link.click();
 
     uploadToServer(blob, fileName);
+    uploadExcelToLocalResult(blob, fileName, experimentData.participantId || '');
     uploadResultSnapshot(resultSnapshot);
 }

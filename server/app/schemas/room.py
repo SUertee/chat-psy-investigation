@@ -89,6 +89,19 @@ class RoomReviewCompleteRequest(BaseModel):
     round_no: int = Field(ge=1, le=2)
 
 
+class RoomCounselorReportSubmittedRequest(BaseModel):
+    participant_id: str = Field(min_length=1, max_length=128)
+    round_no: int = Field(ge=1, le=2)
+
+
+class RoomCounselorReportSubmittedResponse(BaseModel):
+    room_id: str
+    round_no: int
+    submitted: bool
+    submitted_by: str
+    submitted_at: str
+
+
 class RoomReviewCompleteResponse(BaseModel):
     room_id: str
     round_no: int
@@ -106,5 +119,10 @@ class RoomClientFeedbackResponse(BaseModel):
     round_no: int
     submitted: bool
     submitted_at: str | None = None
+    counselor_report_submitted: bool = False
+    counselor_report_submitted_at: str | None = None
+    read_deadline_at: str | None = None
+    server_now: str
+    shared_read_seconds: int = 300
     feedback: dict | None = None
     counselor_review_ready: bool = False

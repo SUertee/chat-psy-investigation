@@ -13,6 +13,8 @@ from ..schemas.room import (
     RoomEndRoundResponse,
     RoomClientFeedbackRequest,
     RoomClientFeedbackResponse,
+    RoomCounselorReportSubmittedRequest,
+    RoomCounselorReportSubmittedResponse,
     RoomReviewCompleteRequest,
     RoomReviewCompleteResponse,
     RoomLeaveRequest,
@@ -26,6 +28,7 @@ from ..services.room_service import (
     get_room,
     leave_room,
     sync_round_start,
+    mark_counselor_report_submitted,
     mark_counselor_review_complete,
     submit_client_feedback,
 )
@@ -97,6 +100,18 @@ def submit_client_feedback_endpoint(room_id: str, payload: RoomClientFeedbackReq
 def review_complete_endpoint(room_id: str, payload: RoomReviewCompleteRequest) -> dict:
     try:
         return mark_counselor_review_complete(
+            room_id=room_id,
+            participant_id=payload.participant_id,
+            round_no=payload.round_no,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/rooms/{room_id}/counselor-report-submitted", response_model=RoomCounselorReportSubmittedResponse)
+def counselor_report_submitted_endpoint(room_id: str, payload: RoomCounselorReportSubmittedRequest) -> dict:
+    try:
+        return mark_counselor_report_submitted(
             room_id=room_id,
             participant_id=payload.participant_id,
             round_no=payload.round_no,

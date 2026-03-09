@@ -77,26 +77,64 @@ async function fetchMatchStatus() {
     return backendRequest(`/match/status/${encodeURIComponent(experimentData.participantId)}`);
 }
 
-async function waitForMatchReady() {
+function activateControlTimeoutFallback(promptKey, waitedMs) {
+    const fallbackAt = getCurrentTimestamp();
+    experimentData.chatMode = 'ai';
+    experimentData.controlPairing.timeoutFallback = true;
+    experimentData.controlPairing.timeoutFallbackReason = 'match_timeout';
+    experimentData.controlPairing.timeoutFallbackAt = fallbackAt;
+    experimentData.controlPairing.timeoutFallbackPromptKey = promptKey || '';
+    experimentData.controlPairing.timeoutFallbackWaitMs = waitedMs;
+    experimentData.timestamps.control_match_timeout_fallback_at = fallbackAt;
+}
+
+function switchControlParticipantToExperimentalFlow(reason = 'match_timeout') {
+    if (experimentData.initialGroup !== 'control') {
+        experimentData.initialGroup = experimentData.group || 'control';
+    }
+    // 仅在当前轮次回退到 AI，对照组归属保持不变，避免后续轮次误走实验组分支。
+    experimentData.chatMode = 'ai';
+    experimentData.timestamps.control_to_experimental_switch_at = getCurrentTimestamp();
+    experimentData.timestamps.control_to_experimental_switch_reason = reason;
+}
+
+async function waitForMatchReady(promptKey) {
+    const pollInterval = EXPERIMENT_CONFIG.MATCH_POLL_INTERVAL_MS || 2000;
+    const timeoutMs = EXPERIMENT_CONFIG.MATCH_TIMEOUT_MS || 300000;
+    const fallbackEnabled = !!EXPERIMENT_CONFIG.CONTROL_TIMEOUT_FALLBACK_ENABLED;
+    const startMs = Date.now();
     let status = await joinMatchQueue();
     if (status.status === 'matched') {
         applyMatchStatus(status);
+        experimentData.controlPairing.timeoutFallback = false;
+        experimentData.controlPairing.timeoutFallbackReason = '';
+        experimentData.controlPairing.timeoutFallbackAt = '';
+        experimentData.controlPairing.timeoutFallbackPromptKey = '';
+        experimentData.controlPairing.timeoutFallbackWaitMs = 0;
         return status;
     }
 
-    const maxAttempts = EXPERIMENT_CONFIG.MATCH_POLL_MAX_ATTEMPTS || 30;
-    const pollInterval = EXPERIMENT_CONFIG.MATCH_POLL_INTERVAL_MS || 2000;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    while (Date.now() - startMs < timeoutMs) {
         await new Promise(resolve => setTimeout(resolve, pollInterval));
         status = await fetchMatchStatus();
         if (status.status === 'matched') {
             applyMatchStatus(status);
+            experimentData.controlPairing.timeoutFallback = false;
+            experimentData.controlPairing.timeoutFallbackReason = '';
+            experimentData.controlPairing.timeoutFallbackAt = '';
+            experimentData.controlPairing.timeoutFallbackPromptKey = '';
+            experimentData.controlPairing.timeoutFallbackWaitMs = 0;
             return status;
         }
     }
-
-    throw new Error('等待匹配超时，请稍后重试。');
+    if (!fallbackEnabled || promptKey !== 'PRACTICE_1' || experimentData.controlPairing.hasMatchedOnce) {
+        throw new Error('当前轮次连接超时，请点击“重试连接”等待另一位参与者。');
+    }
+    activateControlTimeoutFallback(promptKey, timeoutMs);
+    return {
+        status: 'fallback_to_experimental',
+        waited_ms: timeoutMs
+    };
 }
 
 function applyMatchStatus(status) {
@@ -105,6 +143,7 @@ function applyMatchStatus(status) {
     experimentData.controlPairing.roomStatus = status.room_status || status.status || '';
     experimentData.controlPairing.currentRound = status.current_round || 1;
     experimentData.controlPairing.assignedRole = status.role_assignment || '';
+    experimentData.controlPairing.hasMatchedOnce = true;
 }
 
 async function fetchRoomState() {
@@ -131,6 +170,27 @@ async function syncPairedChatStart(roundNo) {
             }),
         }
     );
+}
+
+async function leavePairedRoom(reason = 'user_retry') {
+    if (!experimentData.controlPairing.roomId || !experimentData.participantId) {
+        resetControlRoomState();
+        return null;
+    }
+
+    const roomId = experimentData.controlPairing.roomId;
+    try {
+        const result = await backendRequest(
+            `/rooms/${encodeURIComponent(roomId)}/leave`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ participant_id: experimentData.participantId }),
+            }
+        );
+        return result;
+    } finally {
+        resetControlRoomState();
+    }
 }
 
 function getCurrentControlRoundNumber(promptKey) {
@@ -359,7 +419,9 @@ async function monitorPairedRoundStatus() {
     if (roundInfo.status === 'ended' && !experimentData.controlPairing.roundEnded) {
         experimentData.controlPairing.roundEnded = true;
         if (!experimentData.controlPairing.isCounselor) {
-            showClientFeedbackModal();
+            runPreFeedbackProbeByRoundNo(roundNo, function() {
+                showClientFeedbackModal();
+            });
         }
     }
 }
@@ -408,9 +470,22 @@ async function preparePairedChatSession(promptKey) {
     experimentData.controlPairing.roomLostNotified = false;
     experimentData.controlPairing.roundEnded = false;
 
+    if (experimentData.controlPairing.timeoutFallback && !experimentData.controlPairing.hasMatchedOnce) {
+        return {
+            fallbackToExperimental: true,
+            waitedMs: experimentData.controlPairing.timeoutFallbackWaitMs || (EXPERIMENT_CONFIG.MATCH_TIMEOUT_MS || 300000)
+        };
+    }
+
     await ensureControlParticipantRegistered();
     if (!experimentData.controlPairing.roomId) {
-        await waitForMatchReady();
+        const matchResult = await waitForMatchReady(promptKey);
+        if (matchResult && matchResult.status === 'fallback_to_experimental') {
+            return {
+                fallbackToExperimental: true,
+                waitedMs: matchResult.waited_ms || (EXPERIMENT_CONFIG.MATCH_TIMEOUT_MS || 300000)
+            };
+        }
     }
 
     const room = await fetchRoomState();
@@ -455,7 +530,10 @@ async function initializePairedChat(promptKey, options = {}) {
         !!experimentData.controlPairing.roomId &&
         !!experimentData.controlPairing.roleInCurrentRound;
     if (!options.prepared || !hasPreparedRole) {
-        await preparePairedChatSession(promptKey);
+        const prepareResult = await preparePairedChatSession(promptKey);
+        if (prepareResult && prepareResult.fallbackToExperimental) {
+            throw new Error('连接等待超时，请继续实验。');
+        }
     } else {
         // Refresh room state in case the room changed while waiting.
         await fetchRoomState();
@@ -571,6 +649,22 @@ async function submitPairedClientFeedback(payload) {
                 protective_good: payload.protective_good,
                 protective_improve: payload.protective_improve,
                 overall_suggestion: payload.overall_suggestion,
+            }),
+        }
+    );
+}
+
+async function markPairedCounselorReportSubmitted(roundNo) {
+    if (!experimentData.controlPairing.roomId || !experimentData.participantId) {
+        throw new Error('房间未就绪，无法标记咨询师评估提交。');
+    }
+    return backendRequest(
+        `/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/counselor-report-submitted`,
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                participant_id: experimentData.participantId,
+                round_no: roundNo,
             }),
         }
     );

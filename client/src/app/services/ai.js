@@ -9,7 +9,6 @@ async function callTutorAPI() {
     
     // 显示 loading 占位符
     addTutorMessage('ai', `<span id="${loadingId}" style="color: #888; font-style: italic;">🤖 正在思考中...</span>`);
-    console.log(">>> 开始调用 AI Tutor API..."); // [Debug]
 
     try {
         const apiUrl = getAiProxyUrl();
@@ -27,7 +26,6 @@ async function callTutorAPI() {
             });
         }
 
-        console.log(">>> 发送的消息列表:", messages); // [Debug] 检查发送给AI的历史记录是否正常
 
         // --- 2. 发送请求 ---
         // 注意：将 max_completion_tokens 改回 max_tokens，兼容性更好
@@ -71,7 +69,6 @@ async function callTutorAPI() {
         }
 
         const data = await response.json();
-        console.log(">>> API 返回数据:", data); // [Debug]
         
         // 移除 loading 占位符
         const loadingEl = document.getElementById(loadingId);
@@ -542,6 +539,12 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
         }
         const overlay = document.getElementById('supFeedbackOverlay');
         if (overlay) overlay.remove();
+        if (type === 'P1' || type === 'P2') {
+            runPostFeedbackProbeByPracticeType(type, function() {
+                proceedToNextStage();
+            });
+            return;
+        }
         proceedToNextStage();
     };
     document.getElementById('closeFeedbackBtn').onclick = cleanupAndProceed;
@@ -556,7 +559,8 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
         let hasFeedbackShown = false;
         let reviewCompleteTriggered = false;
         let waitSeconds = 5 * 60;
-        let readSeconds = 5 * 60;
+        let syncedDeadlineMs = null;
+        let syncedClockOffsetMs = 0;
         let waitTimedOut = false;
 
         const roundNo = data.roundNo || (experimentData.controlPairing && experimentData.controlPairing.activeRoundNo) || 1;
@@ -582,6 +586,30 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
         };
         document.getElementById('closeFeedbackBtn').onclick = markReviewAndProceed;
 
+        const getSyncedRemainingSeconds = () => {
+            if (!Number.isFinite(syncedDeadlineMs)) {
+                return null;
+            }
+            const nowServerMs = Date.now() + syncedClockOffsetMs;
+            return Math.max(0, Math.ceil((syncedDeadlineMs - nowServerMs) / 1000));
+        };
+
+        const applySyncedCountdown = (payload) => {
+            if (!payload) {
+                return;
+            }
+            const serverNowMs = Date.parse(payload.server_now);
+            const deadlineMs = Date.parse(payload.read_deadline_at);
+            if (Number.isFinite(serverNowMs) && Number.isFinite(deadlineMs)) {
+                syncedClockOffsetMs = serverNowMs - Date.now();
+                syncedDeadlineMs = deadlineMs;
+            }
+            const readSecFromServer = Number(payload.shared_read_seconds);
+            if (Number.isFinite(readSecFromServer) && readSecFromServer > 0) {
+                // no-op: reserved for UI text only, countdown strictly follows shared deadline
+            }
+        };
+
         const pollPeerFeedback = async () => {
             try {
                 const payload = await fetchPairedClientFeedback(roundNo);
@@ -598,11 +626,19 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
                 btnContainer.style.display = 'block';
                 if (!hasFeedbackShown) {
                     hasFeedbackShown = true;
-                    readSeconds = 5 * 60;
+                    applySyncedCountdown(payload);
                     if (timerEl) {
-                        timerEl.textContent = '共同阅读剩余 05:00';
+                        const remaining = getSyncedRemainingSeconds();
+                        if (Number.isFinite(remaining)) {
+                            const min = String(Math.floor(Math.max(remaining, 0) / 60)).padStart(2, '0');
+                            const sec = String(Math.max(remaining, 0) % 60).padStart(2, '0');
+                            timerEl.textContent = `共同阅读剩余 ${min}:${sec}`;
+                        } else {
+                            timerEl.textContent = '共同阅读待开始';
+                        }
                     }
                 }
+                applySyncedCountdown(payload);
                 if (statusEl) {
                     statusEl.textContent = '来访者已提交反馈，请认真阅读。';
                 }
@@ -616,13 +652,17 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
         }
         window.peerFeedbackCountdownTimer = setInterval(() => {
             if (hasFeedbackShown) {
-                readSeconds -= 1;
+                let remaining = getSyncedRemainingSeconds();
                 if (timerEl) {
-                    const min = String(Math.floor(Math.max(readSeconds, 0) / 60)).padStart(2, '0');
-                    const sec = String(Math.max(readSeconds, 0) % 60).padStart(2, '0');
-                    timerEl.textContent = `共同阅读剩余 ${min}:${sec}`;
+                    if (!Number.isFinite(remaining)) {
+                        timerEl.textContent = '共同阅读待开始';
+                    } else {
+                        const min = String(Math.floor(Math.max(remaining, 0) / 60)).padStart(2, '0');
+                        const sec = String(Math.max(remaining, 0) % 60).padStart(2, '0');
+                        timerEl.textContent = `共同阅读剩余 ${min}:${sec}`;
+                    }
                 }
-                if (readSeconds <= 0) {
+                if (Number.isFinite(remaining) && remaining <= 0) {
                     clearInterval(window.peerFeedbackCountdownTimer);
                     window.peerFeedbackCountdownTimer = null;
                     markReviewAndProceed();

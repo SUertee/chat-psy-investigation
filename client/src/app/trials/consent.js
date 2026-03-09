@@ -38,8 +38,8 @@ function showTrainingOnly() {
     trainingDiv.innerHTML = `
         <div class="video-container">
             <h2>您选择不同意，但仍可观看培训视频</h2>
-            <div style="position: relative; width: 640px; height: 360px; margin: 0 auto;">
-                <video id="trainingVideoOnly" width="640" height="360"
+            <div style="position: relative; width: min(1100px, 94vw); margin: 0 auto; background: #000; border-radius: 12px; overflow: hidden;">
+                <video id="trainingVideoOnly" style="display:block; width:100%; height:auto; max-height:72vh; background:#000; object-fit:contain;"
                        oncontextmenu="return false;" 
                        disablepictureinpicture>
                     <source src="${EXPERIMENT_CONFIG.TRAINING_VIDEO_PATH}" type="video/mp4">

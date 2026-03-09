@@ -40,9 +40,12 @@ const EXPERIMENT_CONFIG = {
     TRAINING_VIDEO_PATH: "./assets/training-video.mp4",
 
     // FastAPI 后端（对照组配对/聊天室）
-    BACKEND_BASE_URL: "http://127.0.0.1:8001/api",
+    BACKEND_BASE_URL: "/api",
     MATCH_POLL_INTERVAL_MS: 2000,
+    MATCH_TIMEOUT_MS: 300000,
     MATCH_POLL_MAX_ATTEMPTS: 30,
+    // 对照组首轮配对超时后是否自动回退到 AI 界面
+    CONTROL_TIMEOUT_FALLBACK_ENABLED: false,
     
     // 实验阶段进度百分比
     PROGRESS_STAGES: {
@@ -633,15 +636,15 @@ const QUESTIONNAIRES = {
 
             {
                 title: "第二部分",
-                description: "请评价您刚才进行的模拟技能练习体验。<br>评分标准：<strong>完全没有 — 略有 — 比较有 — 非常有</strong>",
+                description: "请评价您刚才进行的模拟练习体验。<br>评分标准：<strong>完全没有 — 略有 — 比较有 — 非常有</strong>",
                 questions: [
                     // 4级评分题
-                    { id: "feed_helpful", type: "likert_4_feedback", text: "这次技能练习对于您掌握危机评估技能的帮助程度", required: true },
-                    { id: "feed_realism", type: "likert_4_feedback", text: "这次技能练习的真实感程度", required: true },
-                    { id: "feed_willingness", type: "likert_4_feedback", text: "您再次尝试这种技能练习方法的意愿程度", required: true },
-                    { id: "feed_recommend", type: "likert_4_feedback", text: "您向他人推荐这种技能练习方法的可能性程度", required: true },
-                    { id: "feed_attraction", type: "likert_4_feedback", text: "这种技能练习方法对您的吸引力", required: true },
-                    { id: "feed_satisfaction", type: "likert_4_feedback", text: "您对这种技能练习方法总体的满意度", required: true },
+                    { id: "feed_helpful", type: "likert_4_feedback", text: "这次模拟练习对于您掌握危机评估技能的帮助程度", required: true },
+                    { id: "feed_realism", type: "likert_4_feedback", text: "这次模拟练习的真实感程度", required: true },
+                    { id: "feed_willingness", type: "likert_4_feedback", text: "您再次尝试这种模拟练习方法的意愿程度", required: true },
+                    { id: "feed_recommend", type: "likert_4_feedback", text: "您向他人推荐这种模拟练习方法的可能性程度", required: true },
+                    { id: "feed_attraction", type: "likert_4_feedback", text: "这种模拟练习方法对您的吸引力", required: true },
+                    { id: "feed_satisfaction", type: "likert_4_feedback", text: "您对这种模拟练习方法总体的满意度", required: true },
                     
                     // 定性问题 (文本框)
                     { id: "feed_qual_like", type: "textarea", text: "您最喜欢这种技能练习方法的哪些方面？（至少20字）", required: true },
@@ -805,41 +808,44 @@ const QUESTIONNAIRES = {
 
     // 第三次测量 (原第四次顺位前移)
     questionnaire3: {
-        title: "第三次测量：练习后心理状态",
+        title: "实验后感受与支持需求",
         pages: [
             {
-                title: "心理状态反馈",
-                description: "请根据您<strong>今天进行模拟练习后</strong>的真实感受，评价以下描述与您当前状态的符合程度。<br><strong>1 = 非常不符合 ... 5 = 非常符合</strong>",
+                title: "请根据您当前的真实感受作答",
                 questions: [
-                    { 
-                        id: "ne_emotion", 
-                        type: "likert_5_agree", 
-                        text: "模拟练习后，我感到情绪低落", 
-                        required: true 
+                    {
+                        id: "post_distress",
+                        type: "radio",
+                        text: "在完成本研究任务的过程中，我感到明显的情绪不适或心理压力。",
+                        options: ["是", "否"],
+                        required: true
                     },
-                    { 
-                        id: "ne_anxiety", 
-                        type: "likert_5_agree", 
-                        text: "在模拟练习过程中/结束后，我感到明显紧张或焦虑", 
-                        required: true 
+                    {
+                        id: "post_support_need",
+                        type: "radio",
+                        text: "如果您希望获得心理支持或相关资源，我们可以为您提供帮助。<br>是否希望研究团队与您联系？",
+                        options: ["是", "否"],
+                        required: true,
+                        visible_if: {
+                            question: "post_distress",
+                            equals: "是"
+                        }
                     },
-                    { 
-                        id: "ne_doubt", 
-                        type: "likert_5_agree", 
-                        text: "练习后，我对自己帮助有自杀倾向者的能力产生了怀疑", 
-                        required: true 
+                    {
+                        id: "post_support_contact",
+                        type: "text",
+                        text: "请留下您的联系方式（可选）：手机号 / 邮箱",
+                        placeholder: "手机号 / 邮箱（可选）",
+                        required: false,
+                        visible_if: {
+                            question: "post_support_need",
+                            equals: "是"
+                        }
                     },
-                    { 
-                        id: "ne_frust", 
-                        type: "likert_5_agree", 
-                        text: "参与模拟练习并获得反馈后，我感到失望或挫败", 
-                        required: true 
-                    },
-                    { 
-                        id: "ne_discomfort", 
-                        type: "likert_5_agree", 
-                        text: "模拟练习中的内容（如自杀相关描述）让我产生了不适", 
-                        required: true 
+                    {
+                        id: "post_support_note",
+                        type: "info",
+                        text: "您的联系方式仅用于提供支持资源，不会与实验数据关联。<br>如果您在实验后仍感到困扰，可以联系：<br>北师大雪绒花校内专线：58807003 或心协朋辈支持热线 58800764和58800525"
                     }
                 ]
             }
@@ -858,7 +864,7 @@ const CONSENT_TEXT = {
             <h4 style="margin-top: 20px; color: #2c3e50; border-bottom: 2px solid #eaeaea; padding-bottom: 5px;">1. 研究概况</h4>
             <ul style="padding-left: 20px; list-style-type: disc;">
                 <li><strong>研究目的：</strong>探究提升自杀危机评估培训效果的方法。</li>
-                <li><strong>所需时间：</strong>预计 <strong>60分钟</strong>。</li>
+                <li><strong>所需时间：</strong>预计 <strong>90分钟</strong>。</li>
                 <li><strong>潜在收益：</strong>学习和练习自杀危机评估相关的专业知识与技能。</li>
                 <li><strong>任务要求：</strong>请根据自己的第一反应，认真回答问卷问题并完成实验任务。</li>
             </ul>

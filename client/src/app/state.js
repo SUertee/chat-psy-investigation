@@ -24,7 +24,8 @@ let experimentData = {
         age: null,
         gender: ''
     },
-    group: '', 
+    group: '',
+    initialGroup: '',
     splitHalfOrder: '',
     startTime: '',
     timestamps: {},
@@ -59,7 +60,14 @@ let experimentData = {
         secondRoundRole: '',
         roomLostNotified: false,
         recoveringRoom: false,
-        activePromptKey: ''
+        activePromptKey: '',
+        timeoutFallback: false,
+        timeoutFallbackReason: '',
+        timeoutFallbackAt: '',
+        timeoutFallbackPromptKey: '',
+        timeoutFallbackWaitMs: 0,
+        hasMatchedOnce: false,
+        currentRouteMode: 'paired'
     },
     chatMode: 'ai',
     crisisAssessment: {},

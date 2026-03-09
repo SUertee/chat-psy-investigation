@@ -37,6 +37,25 @@
 2. 确保根目录 `index.html` 可以直接访问
 3. 如需配对聊天室，额外启动 `server` 内的 FastAPI 服务
 
+#### 方法六：Docker 一键运行（推荐服务器）
+
+在项目根目录执行：
+
+```bash
+docker compose up -d --build
+```
+
+访问地址：
+
+- 前端实验页：`http://127.0.0.1:8080/client/public/index.html`
+- 后端健康检查：`http://127.0.0.1:8080/api/health`
+
+停止服务：
+
+```bash
+docker compose down
+```
+
 #### 方法四：没有 bash 时，手动启动（推荐）
 
 如果你的环境没有 `bash`（例如部分 Windows 环境），可以不用脚本，直接执行命令：

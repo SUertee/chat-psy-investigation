@@ -24,6 +24,7 @@ function setupControlChatDebugParticipant() {
     const gender = params.get('debugGender') || '调试';
 
     experimentData.group = 'control';
+    experimentData.initialGroup = 'control';
     experimentData.chatMode = 'paired';
     experimentData.participantProfile = {
         age,
@@ -38,6 +39,13 @@ function setupControlChatDebugParticipant() {
     experimentData.controlPairing.assignedRole = '';
     experimentData.controlPairing.participantKey = `${age}_${gender}`;
     experimentData.controlPairing.lastMessageId = 0;
+    experimentData.controlPairing.timeoutFallback = false;
+    experimentData.controlPairing.timeoutFallbackReason = '';
+    experimentData.controlPairing.timeoutFallbackAt = '';
+    experimentData.controlPairing.timeoutFallbackPromptKey = '';
+    experimentData.controlPairing.timeoutFallbackWaitMs = 0;
+    experimentData.controlPairing.currentRouteMode = 'paired';
+    experimentData.controlPairing.hasMatchedOnce = false;
     experimentData.timestamps.debug_mode_start = getCurrentTimestamp();
 }
 
@@ -88,6 +96,13 @@ function startExperiment() {
 
     experimentData.startTime = getCurrentTimestamp();
     experimentData.participantId = 'P' + Math.floor(Math.random() * 9000 + 1000) + '_' + Date.now().toString().slice(-4);
+    experimentData.controlPairing.timeoutFallback = false;
+    experimentData.controlPairing.timeoutFallbackReason = '';
+    experimentData.controlPairing.timeoutFallbackAt = '';
+    experimentData.controlPairing.timeoutFallbackPromptKey = '';
+    experimentData.controlPairing.timeoutFallbackWaitMs = 0;
+    experimentData.controlPairing.currentRouteMode = 'paired';
+    experimentData.controlPairing.hasMatchedOnce = false;
     const timeline = [];
     
     // --- 阶段 1：知情同意与分组 ---
@@ -97,49 +112,37 @@ function startExperiment() {
 
     timeline.push(createProcedureInstructionTrial());
     
-    // --- 阶段 2：个人信息与前测 (结束 15%) ---
-    timeline.push(createPretestQuestionnaire()); 
-    
-    // 【修复】使用 createProgressNode 替代 CallFunction
+    // --- 阶段 2：前测 + Probe1 ---
+    timeline.push(createPretestQuestionnaire());
+    timeline.push(createProbeTrial('probe1'));
     timeline.push(createProgressNode(15));
     
-    // --- 阶段 3：培训 (视频 + Tutor) (结束 20%) ---
+    // --- 阶段 3：培训 (视频 + Tutor) + Probe2 ---
     timeline.push(createVideoPromptTrial());
     timeline.push(createVideoTrial());
-    timeline.push(createAITutorTrial()); 
-    // (Tutor 结束的 20% 已在 createAITutorTrial 的 on_finish 里处理，这里不用加)
+    timeline.push(createAITutorTrial());
+    timeline.push(createProbeTrial('probe2'));
 
-    // --- 阶段 4：三次练习 ---
-    
-    // 练习一 (结束 35%)
+    // --- 阶段 4：Practice1 ---
     timeline.push(createPracticePromptTrial(1));
-    timeline.push(...createPracticeTimeline('PRACTICE_1', 'START')); 
+    timeline.push(...createPracticeTimeline('PRACTICE_1', 'START'));
 
-    // 练习三 (结束 65%)
+    // --- 阶段 5：Practice2 ---
     timeline.push(createPracticePromptTrial(3));
     timeline.push(...createPracticeTimeline('PRACTICE_3', 'WU_START'));
-
-    // 【修复】更新进度 -> 65%
     timeline.push(createProgressNode(65));
 
-    // --- 阶段 5：后测问卷 (结束 80%) ---
-    timeline.push(createPosttestQuestionnaire()); // 确保这里是你真实的后测函数
-    
-    // 【修复】更新进度 -> 80%
+    // --- 阶段 6：后测问卷 ---
+    timeline.push(createPosttestQuestionnaire());
     timeline.push(createProgressNode(80));
-    
-    // --- 阶段 6：第二次练习 (结束 85%) ---
+
+    // --- 阶段 7：第三次练习（SECOND_CLIENT，不新增probe） ---
     timeline.push(createSecondPracticePromptTrial());
     timeline.push(createSecondPracticeTrial());
-
-    // 【修复】更新进度 -> 85%
     timeline.push(createProgressNode(85));
-
-    // --- 阶段 7：进度推进 (结束 90%) ---
-    // 注意：风险评估弹窗 + AI督导反馈已在第二次练习内部完成，这里不再重复追加独立页面
     timeline.push(createProgressNode(90));
 
-    // --- 阶段 8：最终问卷 (结束 100%) ---
+    // --- 阶段 8：questionnaire3（保留，不新增probe） ---
     timeline.push({
         type: jsPsychHtmlButtonResponse,
         stimulus: `<div style="text-align:left;"><h3>最后一步</h3><p>请填写最后一份简短问卷。</p></div>`,
@@ -147,10 +150,8 @@ function startExperiment() {
     });
     timeline.push(createQuestionnaireTrial('questionnaire3', QUESTIONNAIRES.questionnaire3));
 
-    // 【修复】全部完成 -> 100% (打钩✅)
+    // --- 阶段 9：收尾 ---
     timeline.push(createProgressNode(100, '✅'));
-
-    // --- 结束页 ---
     timeline.push(createEndTrial());
     
     jsPsych.run(timeline);

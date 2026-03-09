@@ -19,6 +19,38 @@ function uploadToServer(blob, fileName) {
     });
 }
 
+function uploadExcelToLocalResult(blob, fileName, participantId = '') {
+    const baseUrl = (EXPERIMENT_CONFIG.BACKEND_BASE_URL || '').replace(/\/$/, '');
+    if (!baseUrl) {
+        console.error('Excel 本地保存失败：BACKEND_BASE_URL 未配置');
+        return Promise.resolve(null);
+    }
+
+    const formData = new FormData();
+    formData.append('file', blob, fileName);
+    formData.append('participant_id', participantId || '');
+
+    return fetch(`${baseUrl}/results/upload`, {
+        method: 'POST',
+        body: formData,
+    })
+        .then(async (response) => {
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || `HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then((data) => {
+            console.log('Excel 已保存到本地 result 目录:', data.saved_path || '');
+            return data;
+        })
+        .catch((error) => {
+            console.error('Excel 本地保存失败:', error);
+            return null;
+        });
+}
+
 function uploadResultSnapshot(snapshotPayload) {
     const baseUrl = (EXPERIMENT_CONFIG.BACKEND_BASE_URL || '').replace(/\/$/, '');
     if (!baseUrl) {

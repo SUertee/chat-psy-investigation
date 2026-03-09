@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from ..schemas.result import ResultSaveRequest, ResultSaveResponse
-from ..services.result_service import save_result_snapshot
+from ..services.result_service import save_result_file, save_result_snapshot
 
 
 router = APIRouter(tags=["results"])
@@ -22,3 +22,25 @@ def save_result_endpoint(payload: ResultSaveRequest) -> dict:
         )
     except Exception as exc:  # pragma: no cover - defensive safeguard
         raise HTTPException(status_code=500, detail=f"failed to save result: {exc}") from exc
+
+
+@router.post("/results/upload", response_model=ResultSaveResponse)
+async def upload_result_file_endpoint(
+    file: UploadFile = File(...),
+    participant_id: str = Form(default=""),
+) -> dict:
+    try:
+        content = await file.read()
+        effective_participant = participant_id or ""
+        if not effective_participant and file.filename:
+            # participant_P_1234.xlsx -> P_1234
+            name = file.filename
+            if name.startswith("participant_"):
+                effective_participant = name[len("participant_"):].split(".", 1)[0]
+        return save_result_file(
+            participant_id=effective_participant,
+            file_bytes=content,
+            file_name=file.filename,
+        )
+    except Exception as exc:  # pragma: no cover - defensive safeguard
+        raise HTTPException(status_code=500, detail=f"failed to upload result file: {exc}") from exc

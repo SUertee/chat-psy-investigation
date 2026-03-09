@@ -16,6 +16,8 @@ skills-lock.json
 
 # Generated experiment exports
 *.xlsx
+client/public/assets/training-video.mp4
+client/public/result/
 __pycache__/
 *.pyc
 
@@ -24,3 +26,4 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+client/public/assets/training-video.mp4

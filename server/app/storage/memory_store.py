@@ -18,6 +18,7 @@ def _normalize(value: str) -> str:
     return value.strip().lower()
 
 OPENING_LINE = "你好… 我觉得好难受，能跟你聊聊吗……"
+SHARED_READ_SECONDS = 5 * 60
 
 
 def build_participant_id(age: int, gender: str, sequence: int) -> str:
@@ -43,6 +44,17 @@ class MemoryStore:
     messages: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     next_message_id: int = 1
 
+    def _ensure_shared_read_window(self, room: dict[str, Any], round_no: int, now: datetime | None = None) -> None:
+        feedback_record = room.get("round_feedbacks", {}).get(round_no)
+        report_record = room.get("round_counselor_reports", {}).get(round_no)
+        if not feedback_record or not report_record:
+            return
+        if feedback_record.get("read_deadline_at"):
+            return
+        now_dt = now or datetime.now(timezone.utc)
+        feedback_record["read_started_at"] = now_dt.isoformat()
+        feedback_record["read_deadline_at"] = (now_dt + timedelta(seconds=SHARED_READ_SECONDS)).isoformat()
+
     def register_participant(self, age: int, gender: str, group_type: str | None = None) -> dict[str, Any]:
         gender_token = _normalize(gender)[:1] or "u"
         counter_key = f"{age}-{gender_token}"
@@ -66,14 +78,17 @@ class MemoryStore:
 
         existing_room_id = self.participant_room_index.get(participant_id)
         if existing_room_id:
-            room = self.rooms[existing_room_id]
-            return {
-                "status": "matched",
-                "participant_id": participant_id,
-                "room_id": existing_room_id,
-                "role_assignment": room["role_assignment"][_role_key_from_participant(participant_id, room)],
-                "current_round": room["current_round"],
-            }
+            room = self.rooms.get(existing_room_id)
+            if room is None or room.get("status") in {"abandoned", "completed"}:
+                self.participant_room_index.pop(participant_id, None)
+            else:
+                return {
+                    "status": "matched",
+                    "participant_id": participant_id,
+                    "room_id": existing_room_id,
+                    "role_assignment": room["role_assignment"][_role_key_from_participant(participant_id, room)],
+                    "current_round": room["current_round"],
+                }
 
         if participant_id in self.waiting_queue:
             return {"status": "waiting", "participant_id": participant_id}
@@ -235,6 +250,13 @@ class MemoryStore:
             raise ValueError("participant is not in room")
         room["status"] = "abandoned"
         room["ended_by"] = participant_id
+        participants = {room["participant_a"], room["participant_b"]}
+        for pid in participants:
+            self.participant_room_index.pop(pid, None)
+            try:
+                self.waiting_queue.remove(pid)
+            except ValueError:
+                pass
         return {
             "room_id": room_id,
             "room_status": room["status"],
@@ -276,19 +298,29 @@ class MemoryStore:
             "protective_improve": protective_improve,
             "overall_suggestion": overall_suggestion,
         }
+        now = datetime.now(timezone.utc)
         record = {
             "room_id": room_id,
             "round_no": round_no,
             "submitted_by": participant_id,
-            "submitted_at": _now_iso(),
+            "submitted_at": now.isoformat(),
+            "read_started_at": None,
+            "read_deadline_at": None,
             "feedback": feedback_payload,
         }
         room["round_feedbacks"][round_no] = record
+        self._ensure_shared_read_window(room, round_no, now=now)
+        counselor_report = room.get("round_counselor_reports", {}).get(round_no) or {}
         return {
             "room_id": room_id,
             "round_no": round_no,
             "submitted": True,
             "submitted_at": record["submitted_at"],
+            "counselor_report_submitted": bool(counselor_report),
+            "counselor_report_submitted_at": counselor_report.get("submitted_at"),
+            "read_deadline_at": record["read_deadline_at"],
+            "server_now": now.isoformat(),
+            "shared_read_seconds": SHARED_READ_SECONDS,
             "feedback": feedback_payload,
             "counselor_review_ready": bool(room.get("round_review_ready", {}).get(round_no)),
         }
@@ -300,13 +332,20 @@ class MemoryStore:
         if round_no < 1 or round_no > len(room["rounds"]):
             raise ValueError("invalid round number")
 
+        now = datetime.now(timezone.utc)
         record = room["round_feedbacks"].get(round_no)
+        counselor_report = room.get("round_counselor_reports", {}).get(round_no) or {}
         if not record:
             return {
                 "room_id": room_id,
                 "round_no": round_no,
                 "submitted": False,
                 "submitted_at": None,
+                "counselor_report_submitted": bool(counselor_report),
+                "counselor_report_submitted_at": counselor_report.get("submitted_at"),
+                "read_deadline_at": None,
+                "server_now": now.isoformat(),
+                "shared_read_seconds": SHARED_READ_SECONDS,
                 "feedback": None,
                 "counselor_review_ready": bool(room.get("round_review_ready", {}).get(round_no)),
             }
@@ -315,8 +354,49 @@ class MemoryStore:
             "round_no": round_no,
             "submitted": True,
             "submitted_at": record["submitted_at"],
+            "counselor_report_submitted": bool(counselor_report),
+            "counselor_report_submitted_at": counselor_report.get("submitted_at"),
+            "read_deadline_at": record.get("read_deadline_at"),
+            "server_now": now.isoformat(),
+            "shared_read_seconds": SHARED_READ_SECONDS,
             "feedback": record["feedback"],
             "counselor_review_ready": bool(room.get("round_review_ready", {}).get(round_no)),
+        }
+
+    def mark_counselor_report_submitted(self, room_id: str, participant_id: str, round_no: int) -> dict[str, Any]:
+        room = self.get_room(room_id)
+        if participant_id not in {room["participant_a"], room["participant_b"]}:
+            raise ValueError("participant is not in room")
+        if round_no < 1 or round_no > len(room["rounds"]):
+            raise ValueError("invalid round number")
+
+        round_plan = room["rounds"][round_no - 1]
+        expected_counselor_id = room["participant_a"] if round_plan["counselor_key"] == "A" else room["participant_b"]
+        if participant_id != expected_counselor_id:
+            raise ValueError("only counselor role can submit counselor report")
+
+        now = datetime.now(timezone.utc)
+        round_reports = room.setdefault("round_counselor_reports", {})
+        existing = round_reports.get(round_no)
+        if existing:
+            submitted_at = existing.get("submitted_at", now.isoformat())
+        else:
+            submitted_at = now.isoformat()
+            round_reports[round_no] = {
+                "room_id": room_id,
+                "round_no": round_no,
+                "submitted_by": participant_id,
+                "submitted_at": submitted_at,
+            }
+
+        self._ensure_shared_read_window(room, round_no, now=now)
+
+        return {
+            "room_id": room_id,
+            "round_no": round_no,
+            "submitted": True,
+            "submitted_by": participant_id,
+            "submitted_at": submitted_at,
         }
 
     def mark_counselor_review_complete(self, room_id: str, participant_id: str, round_no: int) -> dict[str, Any]:
@@ -429,6 +509,7 @@ class MemoryStore:
             ],
             "round_ready": set(),
             "round_feedbacks": {},
+            "round_counselor_reports": {},
             "round_review_ready": {},
             "entry_sync": {},
         }

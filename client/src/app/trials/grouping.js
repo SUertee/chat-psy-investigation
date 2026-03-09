@@ -118,21 +118,21 @@ function createProcedureInstructionTrial() {
                 
                 <div class="flow-path">
                     <div class="flow-step">问卷填写 1</div>
-                    <div class="flow-step">视频学习<span class="step-time">(22分钟)</span></div>
+                    <div class="flow-step">视频学习</div>
                     <div class="flow-step">AI 答疑</div>
-                    <div class="flow-step">模拟练习<span class="step-time">(25分钟)</span></div>
+                    <div class="flow-step">模拟练习</div>
                     <div class="flow-step">问卷填写 2</div>
-                    <div class="flow-step">再次模拟练习<span class="step-time">(10分钟)</span></div>
+                    <div class="flow-step">再次模拟练习</div>
                     <div class="flow-step">简短问卷</div>
                 </div>
 
                 <div class="notice-card">
                     <h3>⚠️ 实验注意事项</h3>
                     <ul class="notice-list">
-                        <li>整个实验大约耗时 <strong>60分钟</strong>，过程中请保持环境安静；</li>
+                        <li>整个实验大约耗时 <strong>90分钟</strong>，过程中请保持环境安静；</li>
                         <li>如果在实验过程中有任何疑问或技术问题，请<strong>随时举手向主试示意</strong>；</li>
                         <li>实验期间请务必<strong>关注自己的电脑屏幕</strong>，请勿与其他参与者交流或观看他人屏幕。</li>
-                        <li><strong>推荐使用 Edge 或 Chrome 浏览器</strong>；请勿使用微信内置浏览器或 Safari。实验时请将页面全屏打开，过程中不要切屏。</li>
+                        <li><strong><span style="white-space: nowrap;">推荐使用 Edge 或 Chrome 浏览器</span></strong>；请勿使用微信内置浏览器或 Safari。实验时请将页面全屏打开，过程中不要切屏。</li>
                         <li>实验最后会弹出文件下载按钮，请务必选择<strong>保存</strong>。</li>
 
                     </ul>
@@ -155,12 +155,11 @@ function performRandomGrouping() {
     // 检查是否有强制分组设置
     if (typeof GROUP_MODE !== 'undefined' && GROUP_MODE !== 'random') {
         experimentData.group = GROUP_MODE;
-        console.log(`[DEBUG] 强制指定分组模式: ${GROUP_MODE}`);
     } else {
         // 执行 1:1 随机分组
         experimentData.group = Math.random() < 0.5 ? 'experimental' : 'control';
-        console.log(`[RUN] 随机分组结果: ${experimentData.group}`);
     }
+    experimentData.initialGroup = experimentData.group;
     
     experimentData.timestamps.grouping_complete = getCurrentTimestamp();
 }
