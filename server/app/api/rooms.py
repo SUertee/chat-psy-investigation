@@ -13,6 +13,9 @@ from ..schemas.room import (
     RoomEndRoundResponse,
     RoomClientFeedbackRequest,
     RoomClientFeedbackResponse,
+    RoomTypingRequest,
+    RoomTypingResponse,
+    RoomPeerTypingStatusResponse,
     RoomCounselorReportSubmittedRequest,
     RoomCounselorReportSubmittedResponse,
     RoomReviewCompleteRequest,
@@ -31,6 +34,8 @@ from ..services.room_service import (
     mark_counselor_report_submitted,
     mark_counselor_review_complete,
     submit_client_feedback,
+    set_typing,
+    get_peer_typing_status,
 )
 
 
@@ -128,5 +133,34 @@ def get_client_feedback_endpoint(
 ) -> dict:
     try:
         return get_client_feedback(room_id=room_id, participant_id=participant_id, round_no=round_no)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/rooms/{room_id}/typing", response_model=RoomTypingResponse)
+def set_typing_endpoint(room_id: str, payload: RoomTypingRequest) -> dict:
+    try:
+        return set_typing(
+            room_id=room_id,
+            participant_id=payload.participant_id,
+            round_no=payload.round_no,
+            is_typing=payload.is_typing,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/rooms/{room_id}/typing-status", response_model=RoomPeerTypingStatusResponse)
+def get_peer_typing_status_endpoint(
+    room_id: str,
+    participant_id: str = Query(min_length=1, max_length=128),
+    round_no: int = Query(ge=1, le=2),
+) -> dict:
+    try:
+        return get_peer_typing_status(
+            room_id=room_id,
+            participant_id=participant_id,
+            round_no=round_no,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

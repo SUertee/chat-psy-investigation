@@ -64,3 +64,20 @@ def get_client_feedback(room_id: str, participant_id: str, round_no: int) -> dic
 
 def mark_counselor_review_complete(room_id: str, participant_id: str, round_no: int) -> dict:
     return store.mark_counselor_review_complete(room_id=room_id, participant_id=participant_id, round_no=round_no)
+
+
+def set_typing(room_id: str, participant_id: str, round_no: int, is_typing: bool) -> dict:
+    return store.set_typing(
+        room_id=room_id,
+        participant_id=participant_id,
+        round_no=round_no,
+        is_typing=is_typing,
+    )
+
+
+def get_peer_typing_status(room_id: str, participant_id: str, round_no: int) -> dict:
+    return store.get_peer_typing_status(
+        room_id=room_id,
+        participant_id=participant_id,
+        round_no=round_no,
+    )

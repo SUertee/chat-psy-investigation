@@ -28,7 +28,8 @@ function setupControlChatDebugParticipant() {
     experimentData.chatMode = 'paired';
     experimentData.participantProfile = {
         age,
-        gender
+        gender,
+        grade: params.get('debugGrade') || '调试'
     };
     experimentData.participantId = '';
     experimentData.controlPairing.registered = false;

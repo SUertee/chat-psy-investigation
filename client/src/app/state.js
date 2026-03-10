@@ -22,7 +22,8 @@ let experimentData = {
     participantId: '',
     participantProfile: {
         age: null,
-        gender: ''
+        gender: '',
+        grade: ''
     },
     group: '',
     initialGroup: '',
@@ -67,7 +68,10 @@ let experimentData = {
         timeoutFallbackPromptKey: '',
         timeoutFallbackWaitMs: 0,
         hasMatchedOnce: false,
-        currentRouteMode: 'paired'
+        currentRouteMode: 'paired',
+        localIsTyping: false,
+        localTypingLastSentAt: 0,
+        peerIsTyping: false
     },
     chatMode: 'ai',
     crisisAssessment: {},

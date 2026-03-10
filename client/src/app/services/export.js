@@ -76,6 +76,7 @@ function saveData() {
     addEvent('meta', 'participant', 'split_half_order', experimentData.splitHalfOrder || '');
     addEvent('meta', 'participant', 'age', experimentData.participantProfile?.age ?? '');
     addEvent('meta', 'participant', 'gender', experimentData.participantProfile?.gender ?? '');
+    addEvent('meta', 'participant', 'grade', experimentData.participantProfile?.grade ?? '');
     const firstRole = control.firstRoundRole || (experimentData.group === 'experimental' ? '咨询师' : '');
     const secondRole = control.secondRoundRole || (experimentData.group === 'experimental' ? '咨询师' : '');
     addEvent('meta', 'group_flow', 'first_round_role', firstRole);
@@ -139,6 +140,7 @@ function saveData() {
         control_timeout_fallback_wait_ms: control.timeoutFallbackWaitMs || '',
         age: experimentData.participantProfile?.age ?? '',
         gender: experimentData.participantProfile?.gender ?? '',
+        grade: experimentData.participantProfile?.grade ?? '',
         split_half_order: experimentData.splitHalfOrder || '',
         pretest_half: experimentData.splitHalfOrder === 'BA' ? 'B' : 'A',
         posttest_half: experimentData.splitHalfOrder === 'BA' ? 'A' : 'B',
@@ -250,6 +252,7 @@ function saveData() {
             control_timeout_fallback_wait_ms: control.timeoutFallbackWaitMs || null,
             age: experimentData.participantProfile?.age ?? null,
             gender: experimentData.participantProfile?.gender ?? '',
+            grade: experimentData.participantProfile?.grade ?? '',
             split_half_order: experimentData.splitHalfOrder || '',
             user_agent: navigator.userAgent || '',
             language: navigator.language || '',

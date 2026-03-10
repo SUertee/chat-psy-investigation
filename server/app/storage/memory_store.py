@@ -19,6 +19,7 @@ def _normalize(value: str) -> str:
 
 OPENING_LINE = "你好… 我觉得好难受，能跟你聊聊吗……"
 SHARED_READ_SECONDS = 5 * 60
+TYPING_STALE_SECONDS = 6
 
 
 def build_participant_id(age: int, gender: str, sequence: int) -> str:
@@ -457,11 +458,63 @@ class MemoryStore:
         }
         self.next_message_id += 1
         self.messages.setdefault(room_id, []).append(message)
+        room.setdefault("typing_state", {}).setdefault(round_no, {})[participant_id] = {
+            "is_typing": False,
+            "updated_at": _now_iso(),
+        }
         return message
 
     def get_messages(self, room_id: str, after_id: int = 0) -> list[dict[str, Any]]:
         self.get_room(room_id)
         return [message for message in self.messages.get(room_id, []) if message["message_id"] > after_id]
+
+    def set_typing(self, room_id: str, participant_id: str, round_no: int, is_typing: bool) -> dict[str, Any]:
+        room = self.get_room(room_id)
+        if participant_id not in {room["participant_a"], room["participant_b"]}:
+            raise ValueError("participant is not in room")
+        if round_no < 1 or round_no > len(room["rounds"]):
+            raise ValueError("invalid round number")
+
+        now_iso = _now_iso()
+        room.setdefault("typing_state", {}).setdefault(round_no, {})[participant_id] = {
+            "is_typing": bool(is_typing),
+            "updated_at": now_iso,
+        }
+        return {
+            "room_id": room_id,
+            "round_no": round_no,
+            "participant_id": participant_id,
+            "is_typing": bool(is_typing),
+            "updated_at": now_iso,
+        }
+
+    def get_peer_typing_status(self, room_id: str, participant_id: str, round_no: int) -> dict[str, Any]:
+        room = self.get_room(room_id)
+        if participant_id not in {room["participant_a"], room["participant_b"]}:
+            raise ValueError("participant is not in room")
+        if round_no < 1 or round_no > len(room["rounds"]):
+            raise ValueError("invalid round number")
+
+        peer_id = room["participant_b"] if room["participant_a"] == participant_id else room["participant_a"]
+        record = room.get("typing_state", {}).get(round_no, {}).get(peer_id)
+        now = datetime.now(timezone.utc)
+        peer_is_typing = False
+        updated_at = None
+
+        if record:
+            updated_at = record.get("updated_at")
+            if record.get("is_typing") and updated_at:
+                updated_dt = datetime.fromisoformat(updated_at)
+                peer_is_typing = (now - updated_dt).total_seconds() <= TYPING_STALE_SECONDS
+
+        return {
+            "room_id": room_id,
+            "round_no": round_no,
+            "peer_participant_id": peer_id,
+            "peer_is_typing": peer_is_typing,
+            "updated_at": updated_at,
+            "server_now": now.isoformat(),
+        }
 
     def _append_system_message(self, room: dict[str, Any], round_no: int, sender_id: str, content: str) -> None:
         sender_key = "A" if room["participant_a"] == sender_id else "B"
@@ -530,6 +583,7 @@ class MemoryStore:
             "round_counselor_reports": {},
             "round_review_ready": {},
             "entry_sync": {},
+            "typing_state": {},
         }
         self.rooms[room_id] = room
         self.messages[room_id] = []

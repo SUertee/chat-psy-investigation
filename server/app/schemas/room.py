@@ -126,3 +126,26 @@ class RoomClientFeedbackResponse(BaseModel):
     shared_read_seconds: int = 300
     feedback: dict | None = None
     counselor_review_ready: bool = False
+
+
+class RoomTypingRequest(BaseModel):
+    participant_id: str = Field(min_length=1, max_length=128)
+    round_no: int = Field(ge=1, le=2)
+    is_typing: bool
+
+
+class RoomTypingResponse(BaseModel):
+    room_id: str
+    round_no: int
+    participant_id: str
+    is_typing: bool
+    updated_at: str
+
+
+class RoomPeerTypingStatusResponse(BaseModel):
+    room_id: str
+    round_no: int
+    peer_participant_id: str
+    peer_is_typing: bool
+    updated_at: str | None = None
+    server_now: str

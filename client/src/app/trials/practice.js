@@ -631,7 +631,11 @@ function createPracticeTimeline(promptKey, startNodeId) {
                 stimulus: createChatInterface,
                 choices: [],
                 conditional_function: function() {
-                    return experimentData.group === 'control';
+                    return experimentData.group === 'control' || !!(
+                        experimentData.controlPairing &&
+                        experimentData.controlPairing.timeoutFallback &&
+                        experimentData.controlPairing.timeoutFallbackPromptKey === promptKey
+                    );
                 },
                 on_load: function() {
                     experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();

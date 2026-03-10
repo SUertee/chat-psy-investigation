@@ -3,6 +3,8 @@ function getBackendBaseUrl() {
     return (EXPERIMENT_CONFIG.BACKEND_BASE_URL || '').replace(/\/$/, '');
 }
 
+const PAIRED_TYPING_HEARTBEAT_MS = 2500;
+
 async function backendRequest(path, options = {}) {
     const baseUrl = getBackendBaseUrl();
     if (!baseUrl) {
@@ -79,6 +81,13 @@ async function fetchMatchStatus() {
 
 function activateControlTimeoutFallback(promptKey, waitedMs) {
     const fallbackAt = getCurrentTimestamp();
+    if (promptKey === 'PRACTICE_1') {
+        // 首轮配对超时后，直接切换到实验组，后续练习不再进入配对等待。
+        if (experimentData.initialGroup !== 'control') {
+            experimentData.initialGroup = experimentData.group || 'control';
+        }
+        experimentData.group = 'experimental';
+    }
     experimentData.chatMode = 'ai';
     experimentData.controlPairing.timeoutFallback = true;
     experimentData.controlPairing.timeoutFallbackReason = 'match_timeout';
@@ -92,7 +101,7 @@ function switchControlParticipantToExperimentalFlow(reason = 'match_timeout') {
     if (experimentData.initialGroup !== 'control') {
         experimentData.initialGroup = experimentData.group || 'control';
     }
-    // 仅在当前轮次回退到 AI，对照组归属保持不变，避免后续轮次误走实验组分支。
+    experimentData.group = 'experimental';
     experimentData.chatMode = 'ai';
     experimentData.timestamps.control_to_experimental_switch_at = getCurrentTimestamp();
     experimentData.timestamps.control_to_experimental_switch_reason = reason;
@@ -101,7 +110,6 @@ function switchControlParticipantToExperimentalFlow(reason = 'match_timeout') {
 async function waitForMatchReady(promptKey) {
     const pollInterval = EXPERIMENT_CONFIG.MATCH_POLL_INTERVAL_MS || 2000;
     const timeoutMs = EXPERIMENT_CONFIG.MATCH_TIMEOUT_MS || 300000;
-    const fallbackEnabled = !!EXPERIMENT_CONFIG.CONTROL_TIMEOUT_FALLBACK_ENABLED;
     const startMs = Date.now();
     let status = await joinMatchQueue();
     if (status.status === 'matched') {
@@ -127,7 +135,7 @@ async function waitForMatchReady(promptKey) {
             return status;
         }
     }
-    if (!fallbackEnabled || promptKey !== 'PRACTICE_1' || experimentData.controlPairing.hasMatchedOnce) {
+    if (promptKey !== 'PRACTICE_1' || experimentData.controlPairing.hasMatchedOnce) {
         throw new Error('当前轮次连接超时，请点击“重试连接”等待另一位参与者。');
     }
     activateControlTimeoutFallback(promptKey, timeoutMs);
@@ -274,11 +282,169 @@ function getControlClientProfileHTML() {
     `;
 }
 
+function getPairedTypingIndicatorId() {
+    return 'pairedTypingIndicator';
+}
+
+function setPeerTypingIndicatorVisible(visible) {
+    const messagesDiv = document.getElementById('chatMessages');
+    if (!messagesDiv) return;
+
+    const indicatorId = getPairedTypingIndicatorId();
+    const existing = document.getElementById(indicatorId);
+    if (!visible) {
+        if (existing) existing.remove();
+        return;
+    }
+    if (existing) return;
+
+    const avatarLabel = experimentData.controlPairing.isCounselor ? '访' : '咨';
+    const row = document.createElement('div');
+    row.id = indicatorId;
+    row.className = 'message-row ai';
+    row.innerHTML = `
+        <div class="avatar">${avatarLabel}</div>
+        <div class="bubble" style="color:#666; font-style:italic;">对方正在输入中...</div>
+    `;
+    messagesDiv.appendChild(row);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function getTypingRoundNo() {
+    return experimentData.controlPairing.activeRoundNo || experimentData.controlPairing.currentRound || 1;
+}
+
+async function reportPairedTypingStatus(isTyping, force = false) {
+    if (
+        !experimentData.controlPairing.roomId ||
+        !experimentData.participantId ||
+        experimentData.chatMode !== 'paired'
+    ) {
+        return;
+    }
+
+    const now = Date.now();
+    if (!force) {
+        const sameState = experimentData.controlPairing.localIsTyping === isTyping;
+        const withinHeartbeat = now - (experimentData.controlPairing.localTypingLastSentAt || 0) < PAIRED_TYPING_HEARTBEAT_MS;
+        if (sameState && withinHeartbeat) {
+            return;
+        }
+    }
+
+    const roundNo = getTypingRoundNo();
+    await backendRequest(`/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/typing`, {
+        method: 'POST',
+        body: JSON.stringify({
+            participant_id: experimentData.participantId,
+            round_no: roundNo,
+            is_typing: !!isTyping,
+        }),
+    });
+
+    experimentData.controlPairing.localIsTyping = !!isTyping;
+    experimentData.controlPairing.localTypingLastSentAt = now;
+}
+
+function syncLocalTypingStatusFromInput() {
+    if (experimentData.chatMode !== 'paired') return;
+    const input = document.getElementById('chatInput');
+    if (!input || input.disabled) return;
+    const hasText = !!input.value.trim();
+    reportPairedTypingStatus(hasText).catch(error => {
+        console.warn('[PAIRED_CHAT] 轮询同步输入状态失败:', error);
+    });
+}
+
+function teardownPairedTypingReporter() {
+    const handlers = window.pairedTypingHandlers;
+    if (handlers && handlers.input) {
+        handlers.input.removeEventListener('input', handlers.onInput);
+        handlers.input.removeEventListener('blur', handlers.onBlur);
+        handlers.input.removeEventListener('focus', handlers.onFocus);
+    }
+    if (handlers && handlers.heartbeatTimer) {
+        clearInterval(handlers.heartbeatTimer);
+    }
+    window.pairedTypingHandlers = null;
+
+    if (experimentData.controlPairing.localIsTyping) {
+        reportPairedTypingStatus(false, true).catch(error => {
+            console.warn('[PAIRED_CHAT] 同步停止输入状态失败:', error);
+        });
+    }
+    experimentData.controlPairing.localIsTyping = false;
+    experimentData.controlPairing.localTypingLastSentAt = 0;
+    experimentData.controlPairing.peerIsTyping = false;
+    setPeerTypingIndicatorVisible(false);
+}
+
+function setupPairedTypingReporter() {
+    teardownPairedTypingReporter();
+
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+
+    const onInput = () => {
+        const hasText = !!input.value.trim();
+        reportPairedTypingStatus(hasText).catch(error => {
+            console.warn('[PAIRED_CHAT] 上报输入状态失败:', error);
+        });
+    };
+
+    const onBlur = () => {
+        reportPairedTypingStatus(false, true).catch(error => {
+            console.warn('[PAIRED_CHAT] 上报停止输入状态失败:', error);
+        });
+    };
+
+    const onFocus = () => {
+        if (input.value.trim()) {
+            reportPairedTypingStatus(true).catch(error => {
+                console.warn('[PAIRED_CHAT] 上报输入状态失败:', error);
+            });
+        }
+    };
+
+    input.addEventListener('input', onInput);
+    input.addEventListener('blur', onBlur);
+    input.addEventListener('focus', onFocus);
+
+    const heartbeatTimer = setInterval(() => {
+        if (document.activeElement === input && input.value.trim()) {
+            reportPairedTypingStatus(true).catch(error => {
+                console.warn('[PAIRED_CHAT] 输入心跳同步失败:', error);
+            });
+        }
+    }, PAIRED_TYPING_HEARTBEAT_MS);
+
+    window.pairedTypingHandlers = { input, onInput, onBlur, onFocus, heartbeatTimer };
+    syncLocalTypingStatusFromInput();
+}
+
+async function refreshPeerTypingStatus() {
+    if (!experimentData.controlPairing.roomId || !experimentData.participantId) {
+        return;
+    }
+    const roundNo = getTypingRoundNo();
+    const query = new URLSearchParams({
+        participant_id: experimentData.participantId,
+        round_no: String(roundNo),
+    });
+    const status = await backendRequest(
+        `/rooms/${encodeURIComponent(experimentData.controlPairing.roomId)}/typing-status?${query.toString()}`
+    );
+    const peerIsTyping = !!status.peer_is_typing;
+    experimentData.controlPairing.peerIsTyping = peerIsTyping;
+    setPeerTypingIndicatorVisible(peerIsTyping);
+}
+
 function stopPairedChatPolling() {
     if (window.pairedChatPollingInterval) {
         clearInterval(window.pairedChatPollingInterval);
         window.pairedChatPollingInterval = null;
     }
+    teardownPairedTypingReporter();
 }
 
 function isRoomNotFoundError(error) {
@@ -304,6 +470,8 @@ function resetControlRoomState() {
     experimentData.controlPairing.roomStatus = '';
     experimentData.controlPairing.lastMessageId = 0;
     experimentData.controlPairing.roundEnded = false;
+    experimentData.controlPairing.peerIsTyping = false;
+    setPeerTypingIndicatorVisible(false);
 }
 
 async function recoverPairedRoom(reason = 'room_lost') {
@@ -398,6 +566,8 @@ async function refreshPairedMessages() {
         if (isSelf) {
             addChatMessage('user', message.content, { avatarLabel: '我' });
         } else {
+            setPeerTypingIndicatorVisible(false);
+            experimentData.controlPairing.peerIsTyping = false;
             const peerAvatar = message.sender_role === 'counselor' ? '咨' : '访';
             addChatMessage('ai', message.content, { avatarLabel: peerAvatar });
         }
@@ -431,6 +601,7 @@ function startPairedChatPolling() {
 
     const pollInterval = EXPERIMENT_CONFIG.MATCH_POLL_INTERVAL_MS || 2000;
     window.pairedChatPollingInterval = setInterval(() => {
+        syncLocalTypingStatusFromInput();
         refreshPairedMessages().catch(error => {
             if (handlePairedRoomNotFound(error) || handlePairedParticipantMissing(error)) return;
             console.error('[PAIRED_CHAT] 拉取消息失败:', error);
@@ -438,6 +609,10 @@ function startPairedChatPolling() {
         monitorPairedRoundStatus().catch(error => {
             if (handlePairedRoomNotFound(error) || handlePairedParticipantMissing(error)) return;
             console.error('[PAIRED_CHAT] 拉取房间状态失败:', error);
+        });
+        refreshPeerTypingStatus().catch(error => {
+            if (handlePairedRoomNotFound(error) || handlePairedParticipantMissing(error)) return;
+            console.error('[PAIRED_CHAT] 拉取输入状态失败:', error);
         });
     }, pollInterval);
 }
@@ -455,6 +630,10 @@ function setChatComposerEnabled(enabled) {
         sendButton.disabled = !enabled;
         sendButton.style.opacity = enabled ? '1' : '0.5';
         sendButton.style.cursor = enabled ? 'pointer' : 'not-allowed';
+    }
+
+    if (!enabled) {
+        teardownPairedTypingReporter();
     }
 }
 
@@ -479,6 +658,9 @@ async function preparePairedChatSession(promptKey) {
 
     await ensureControlParticipantRegistered();
     if (!experimentData.controlPairing.roomId) {
+        if (promptKey !== 'PRACTICE_1') {
+            throw new Error('仅首轮允许执行配对等待；当前未找到首轮房间，请刷新后从第一轮重新进入。');
+        }
         const matchResult = await waitForMatchReady(promptKey);
         if (matchResult && matchResult.status === 'fallback_to_experimental') {
             return {
@@ -541,7 +723,9 @@ async function initializePairedChat(promptKey, options = {}) {
     mountClientProfilePanel();
 
     setChatComposerEnabled(true);
+    setupPairedTypingReporter();
     await refreshPairedMessages();
+    await refreshPeerTypingStatus().catch(() => {});
     startPairedChatPolling();
 }
 
@@ -568,6 +752,9 @@ async function sendPairedChatMessageFromInput() {
     if (input) {
         input.value = '';
     }
+    reportPairedTypingStatus(false, true).catch(error => {
+        console.warn('[PAIRED_CHAT] 发送后同步输入状态失败:', error);
+    });
 
     let sent;
     try {

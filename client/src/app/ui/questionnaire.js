@@ -361,9 +361,10 @@ function createQuestionnaireTrial(phase, questionnaireConfig) {
             if (phase === 'pretest' && data.response) {
                 const age = parseInt(data.response.pt_age, 10);
                 const gender = (data.response.pt_gender || '').trim();
+                const grade = (data.response.pt_grade || '').trim();
 
-                if (!Number.isNaN(age) && gender) {
-                    experimentData.participantProfile = { age, gender };
+                if (!Number.isNaN(age) && gender && grade) {
+                    experimentData.participantProfile = { age, gender, grade };
                     experimentData.participantId = '';
                     experimentData.controlPairing.participantKey = `${age}_${gender}`;
                 }
@@ -392,6 +393,12 @@ function applyPretestDebugDefaults() {
     if (preferred) {
         preferred.checked = true;
         preferred.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    const gradeInput = document.querySelector('input[name="pt_grade"]');
+    if (gradeInput && !gradeInput.value) {
+        gradeInput.value = '大三';
+        gradeInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
 }
 
