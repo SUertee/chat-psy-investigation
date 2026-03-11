@@ -348,11 +348,6 @@ function createQuestionnaireTrial(phase, questionnaireConfig) {
                 initMultiPageLogic();
             }
 
-            if (phase === 'pretest' && typeof DEBUG_MODE !== 'undefined' && DEBUG_MODE) {
-                setTimeout(() => {
-                    applyPretestDebugDefaults();
-                }, 0);
-            }
         },
         on_finish: function(data) {
             experimentData.responses[phase] = data.response;
@@ -371,35 +366,6 @@ function createQuestionnaireTrial(phase, questionnaireConfig) {
             }
         }
     };
-}
-
-function applyPretestDebugDefaults() {
-    const ageInput = document.querySelector('input[name="pt_age"]');
-    if (ageInput && !ageInput.value) {
-        ageInput.value = '20';
-    }
-
-    const genderChoices = document.querySelectorAll('input[name="pt_gender"]');
-    if (!genderChoices || !genderChoices.length) {
-        return;
-    }
-
-    const hasSelected = Array.from(genderChoices).some((item) => item.checked);
-    if (hasSelected) {
-        return;
-    }
-
-    const preferred = Array.from(genderChoices).find((item) => item.value === '女') || genderChoices[0];
-    if (preferred) {
-        preferred.checked = true;
-        preferred.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    const gradeInput = document.querySelector('input[name="pt_grade"]');
-    if (gradeInput && !gradeInput.value) {
-        gradeInput.value = '大三';
-        gradeInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
 }
 
 // 3. 多页 HTML 生成器
@@ -438,9 +404,7 @@ function generateMultiPageHTML(pages, phaseId) {
         if (index < pages.length - 1) {
             html += `<button type="button" class="btn-nav btn-next" onclick="validateAndNext(${index})">下一页</button>`;
         } else {
-            // 如果是最后一页且是 DEBUG 模式，去掉 novalidate 限制或添加特殊跳过逻辑
-            html += `<button type="submit" class="btn-nav btn-submit" id="real-submit-btn" 
-                    ${DEBUG_MODE ? 'formnovalidate' : ''}>提交问卷</button>`;
+            html += `<button type="submit" class="btn-nav btn-submit" id="real-submit-btn">提交问卷</button>`;
         }
         
         html += `</div>`; // end nav-buttons
