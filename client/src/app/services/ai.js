@@ -396,7 +396,7 @@ function renderPeerFeedbackHTML(feedback) {
                 <p style="margin:6px 0 0 0;"><strong>咨询师需要提升的地方：</strong>${feedback.relationship_improve || ''}</p>
             </div>
             <div style="background:#fff; border:1px solid #e9edf3; border-radius:8px; padding:14px;">
-                <strong>维度2：风险评估</strong>
+                <strong>维度2：风险评估（咨询师是否根据C-SSRS评估自杀想法、计划、实施意向、准备行为、风险性因素等。）</strong>
                 <p style="margin:8px 0 0 0;"><strong>咨询师做得好的地方：</strong>${feedback.risk_good || ''}</p>
                 <p style="margin:6px 0 0 0;"><strong>咨询师需要提升的地方：</strong>${feedback.risk_improve || ''}</p>
             </div>

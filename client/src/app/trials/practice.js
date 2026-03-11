@@ -1348,13 +1348,16 @@ function showClientFeedbackModal() {
                     <h3 style="margin-top:0;">来访者反馈表</h3>
                     <div id="clientFeedbackTimer" style="font-size:13px; color:#ad6800;">剩余填写时间 05:00</div>
                 </div>
+                <p style="margin:0 0 12px 0; font-size:13px; color:#555; line-height:1.7;">
+                    请根据哥伦比亚自杀严重程度评估标准（C-SSRS）和心理咨询原则进行点评：
+                </p>
                 <label><strong>维度1：建立关系</strong></label>
                 <label style="font-size:13px; color:#666;">咨询师做得好的地方：</label>
                 <textarea id="clientFbRelGood" style="width:100%; height:70px; margin:6px 0 8px 0; padding:8px;" placeholder="请写出咨询师做得好的点"></textarea>
                 <label style="font-size:13px; color:#666;">咨询师需要提升的地方：</label>
                 <textarea id="clientFbRelImprove" style="width:100%; height:70px; margin:6px 0 12px 0; padding:8px;" placeholder="请写出咨询师可改进之处"></textarea>
 
-                <label><strong>维度2：风险评估</strong></label>
+                <label><strong>维度2：风险评估（咨询师是否根据C-SSRS评估自杀想法、计划、实施意向、准备行为、风险性因素等。）</strong></label>
                 <label style="font-size:13px; color:#666;">咨询师做得好的地方：</label>
                 <textarea id="clientFbRiskGood" style="width:100%; height:70px; margin:6px 0 8px 0; padding:8px;" placeholder="请写出咨询师做得好的点"></textarea>
                 <label style="font-size:13px; color:#666;">咨询师需要提升的地方：</label>
