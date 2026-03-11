@@ -591,6 +591,7 @@ function createPracticeTimeline(promptKey, startNodeId) {
                 choices: [],
                 on_load: function() {
                     experimentData.chatMode = 'ai';
+                    resetAiStageGuards();
                     initializeChat(promptKey); // 使用 AI 角色
                     experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
                     startCountdown();   // 启动倒计时
@@ -631,6 +632,7 @@ function createPracticeTimeline(promptKey, startNodeId) {
                 },
                 on_load: function() {
                     experimentData.timestamps[promptKey + '_start'] = getCurrentTimestamp();
+                    resetAiStageGuards();
                     const routeMode = (experimentData.controlPairing && experimentData.controlPairing.currentRouteMode) || 'paired';
                     if (routeMode === 'ai') {
                         if (typeof switchControlParticipantToExperimentalFlow === 'function') {
@@ -827,6 +829,11 @@ function hideFinishButton() {
     if (btn) btn.style.display = 'none';
 }
 
+function resetAiStageGuards() {
+    window.aiStageEndingInProgress = false;
+    window.aiAssessmentSubmitting = false;
+}
+
 function finishStage(autoTriggered = false) {
     console.log("正在结束当前阶段...");
 
@@ -869,7 +876,24 @@ function finishStage(autoTriggered = false) {
         return;
     }
 
+    // AI 对话流程：防止重复触发结束逻辑（手动点击 + 倒计时到时）。
+    if (window.aiStageEndingInProgress) {
+        return;
+    }
+
+    // 已经在填写风险评估表时，不允许再次触发结束。
+    if (document.getElementById('crisisModal')) {
+        return;
+    }
+
     if (document.getElementById('chatMessages')) {
+        window.aiStageEndingInProgress = true;
+        if (window.countdownTimer) {
+            clearInterval(window.countdownTimer);
+            window.countdownTimer = null;
+        }
+        hideCountdown();
+        hideFinishButton();
         showCrisisAssessmentModal(); // 调用新写的弹窗函数
     } else {
         // 非练习阶段直接结束
@@ -929,6 +953,7 @@ function createSecondPracticeTrial() {
                 on_load: function() {
                     experimentData.timestamps.second_practice_start = getCurrentTimestamp();
                     experimentData.chatMode = 'ai';
+                    resetAiStageGuards();
                     if (typeof stopPairedChatPolling === 'function') {
                         stopPairedChatPolling();
                     }
@@ -1094,6 +1119,10 @@ function createScriptedSimulationTimeline(startNodeId) {
 }
 
 function showCrisisAssessmentModal() {
+    if (document.getElementById('crisisModal')) {
+        return;
+    }
+    window.aiAssessmentSubmitting = false;
     experimentData.timestamps.ai_risk_assessment_form_start = getCurrentTimestamp();
     // 注入弹窗 CSS
     const modalStyle = `
@@ -1131,12 +1160,22 @@ function showCrisisAssessmentModal() {
 }
 
 function handleModalAssessmentSubmit() {
+    if (window.aiAssessmentSubmitting) {
+        return;
+    }
     const levelEl = document.querySelector('input[name="modal_crisis_level"]:checked');
     const reasonEl = document.getElementById('modal_crisis_reason');
     
     if (!levelEl || !reasonEl.value.trim()) {
         alert('请完成所有评估项目');
         return;
+    }
+    window.aiAssessmentSubmitting = true;
+    const submitBtn = document.getElementById('submitAssessmentBtn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.7';
+        submitBtn.textContent = '提交中...';
     }
 
     // 1. 保存当前练习的评估数据
@@ -1152,7 +1191,10 @@ function handleModalAssessmentSubmit() {
     experimentData.responses.practice_assessments.push(currentAssessment);
 
     // 2. 移除评估弹窗
-    document.getElementById('crisisModal').remove();
+    const modal = document.getElementById('crisisModal');
+    if (modal) {
+        modal.remove();
+    }
     experimentData.timestamps.ai_risk_assessment_form_end = getCurrentTimestamp();
 
     // 3. 优先按当前练习 promptKey 映射 Profile，避免对照组因前两轮是配对练习而错映射到 P1
