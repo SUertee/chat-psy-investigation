@@ -41,7 +41,7 @@ const EXPERIMENT_CONFIG = {
     TRAINING_VIDEO_PATH: "./assets/training-video.mp4",
 
     // FastAPI 后端（对照组配对/聊天室）
-    BACKEND_BASE_URL: "http://127.0.0.1:9001/api",
+    BACKEND_BASE_URL: "/api",
     MATCH_POLL_INTERVAL_MS: 2000,
     MATCH_TIMEOUT_MS: 30000,
     MATCH_POLL_MAX_ATTEMPTS: 30,

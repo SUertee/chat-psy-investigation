@@ -20,10 +20,6 @@ function createVideoTrial() {
             <button class="jspsych-btn" id="finishVideoButton" onclick="finishVideo()" disabled>
                 我已观看完视频
             </button>
-            ${DEBUG_MODE ? 
-                `<button class="jspsych-btn" id="skipVideoButton" onclick="finishVideo()" style="background-color: #f44336; margin-left: 10px;">
-                    [DEBUG] 跳过视频
-                </button>` : ''}
         </div>
     `;
 
@@ -64,14 +60,6 @@ function createVideoTrial() {
             if (DEBUG_MODE) {
                 if (finishButton) finishButton.disabled = false;
             }
-            const skipButton = document.getElementById('skipVideoButton');
-            if (skipButton) {
-                skipButton.disabled = false;
-            }
-            // 确保跳过按钮在加载后立即可用 (DEBUG)
-            if (skipButton) {
-                skipButton.disabled = false;
-            }
 
             const startOverlay = document.getElementById('videoStartOverlay');
             const startPlayback = () => {
@@ -104,10 +92,6 @@ function createVideoTrial() {
             video.onended = function() {
                 finishButton.disabled = false; // 视频播放完毕后，启用正式继续按钮
                 finishButton.textContent = '视频播放完毕，继续实验';
-                // 播放结束，可以禁用 DEBUG 按钮
-                if (skipButton) {
-                    skipButton.style.display = 'none';
-                }
             };
             
             // 确保视频从头开始
@@ -495,21 +479,29 @@ function createControlConnectionBriefTrial(promptKey) {
                         if (experimentData.controlPairing) {
                             experimentData.controlPairing.currentRouteMode = 'ai';
                         }
+                        experimentData.group = 'experimental';
                         const waitedSeconds = Math.floor((pairing.waitedMs || 300000) / 1000);
                         successBlock.innerHTML = `
                             <p style="margin: 0;"><strong>连接等待超时，系统将继续下一阶段。</strong></p>
                             <p style="margin: 6px 0 0 0;">等待时长：约 ${waitedSeconds} 秒</p>
-                            <p style="margin: 2px 0 0 0;">请点击下方按钮继续实验。</p>
+                            <p style="margin: 2px 0 0 0;">点击“继续”后将切换到实验组会话准备页。</p>
                         `;
                         successBlock.style.display = 'block';
                         if (continueBtn) {
                             continueBtn.style.display = 'inline-block';
                             continueBtn.disabled = false;
-                            continueBtn.textContent = '继续实验';
+                            continueBtn.textContent = '继续';
                             continueBtn.style.backgroundColor = '#07c160';
                             continueBtn.style.cursor = 'pointer';
                             continueBtn.onclick = function() {
-                                jsPsych.finishTrial();
+                                const roundNo = getPracticeRoundNo(promptKey);
+                                loadingBlock.innerHTML = '<p style="margin: 0; color:#666;"><strong>已切换到实验组，正在进入会话准备...</strong></p>';
+                                successBlock.innerHTML = getCounselorInstructionHTML(roundNo, '来访者：由AI扮演');
+                                successBlock.style.display = 'block';
+                                continueBtn.textContent = '开始会话';
+                                continueBtn.onclick = function() {
+                                    jsPsych.finishTrial();
+                                };
                             };
                         }
                         return;
