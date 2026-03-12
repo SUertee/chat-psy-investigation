@@ -75,7 +75,9 @@ let experimentData = {
     },
     chatMode: 'ai',
     crisisAssessment: {},
-    supervisorFeedback: ''
+    supervisorFeedback: '',
+    __autosaveTrialCount: 0,
+    __autosaveDraftForm: null
 };
 
 let countdownTimer;

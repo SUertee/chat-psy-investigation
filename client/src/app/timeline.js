@@ -85,7 +85,10 @@ function startControlChatDebugExperiment() {
     jsPsych.run(timeline);
 }
 
-async function startExperiment() {
+async function startExperiment(resumeInfo = null) {
+    const restoreInfo = (resumeInfo && typeof resumeInfo === 'object') ? resumeInfo : { available: false, resumeTrialIndex: 0 };
+    const isResumeMode = !!(restoreInfo && restoreInfo.available && Number(restoreInfo.resumeTrialIndex || 0) > 0);
+
     if (isControlChatDebugMode()) {
         startControlChatDebugExperiment();
         return;
@@ -95,20 +98,33 @@ async function startExperiment() {
     initCustomProgressBar();
     updateCustomProgress(5); 
 
-    experimentData.startTime = getCurrentTimestamp();
-    experimentData.participantId = 'P' + Math.floor(Math.random() * 9000 + 1000) + '_' + Date.now().toString().slice(-4);
-    experimentData.controlPairing.timeoutFallback = false;
-    experimentData.controlPairing.timeoutFallbackReason = '';
-    experimentData.controlPairing.timeoutFallbackAt = '';
-    experimentData.controlPairing.timeoutFallbackPromptKey = '';
-    experimentData.controlPairing.timeoutFallbackWaitMs = 0;
-    experimentData.controlPairing.currentRouteMode = 'paired';
-    experimentData.controlPairing.hasMatchedOnce = false;
+    if (!experimentData.startTime) {
+        experimentData.startTime = getCurrentTimestamp();
+    }
+    if (!experimentData.participantId) {
+        experimentData.participantId = 'P' + Math.floor(Math.random() * 9000 + 1000) + '_' + Date.now().toString().slice(-4);
+    }
+    if (!isResumeMode) {
+        experimentData.controlPairing.timeoutFallback = false;
+        experimentData.controlPairing.timeoutFallbackReason = '';
+        experimentData.controlPairing.timeoutFallbackAt = '';
+        experimentData.controlPairing.timeoutFallbackPromptKey = '';
+        experimentData.controlPairing.timeoutFallbackWaitMs = 0;
+        experimentData.controlPairing.currentRouteMode = 'paired';
+        experimentData.controlPairing.hasMatchedOnce = false;
+    }
+    if (typeof persistAutosaveNow === 'function') {
+        persistAutosaveNow('experiment_start', true).catch((error) => {
+            console.warn('[AUTOSAVE] experiment start save failed:', error);
+        });
+    }
     const timeline = [];
     
     // --- 阶段 1：知情同意与分组 ---
     timeline.push(createConsentTrial());
-    await performRandomGrouping();
+    if (!isResumeMode || !experimentData.group || !experimentData.timestamps.grouping_complete) {
+        await performRandomGrouping();
+    }
     timeline.push(createGroupingTrial());
 
     timeline.push(createProcedureInstructionTrial());
@@ -155,6 +171,15 @@ async function startExperiment() {
     timeline.push(createProgressNode(100, '✅'));
     timeline.push(createEndTrial());
     
+    if (isResumeMode) {
+        const resumeIndex = Number(restoreInfo.resumeTrialIndex || 0);
+        const boundedIndex = Math.max(0, Math.min(resumeIndex, timeline.length - 1));
+        if (boundedIndex > 0 && boundedIndex < timeline.length) {
+            console.log(`[AUTOSAVE] resume from trial index ${boundedIndex}/${timeline.length}`);
+            jsPsych.run(timeline.slice(boundedIndex));
+            return;
+        }
+    }
     jsPsych.run(timeline);
 }
    

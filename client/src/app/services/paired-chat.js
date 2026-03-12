@@ -23,7 +23,10 @@ async function backendRequest(path, options = {}) {
         let detail = response.statusText;
         try {
             const errorPayload = await response.json();
-            detail = errorPayload.detail || errorPayload.error || JSON.stringify(errorPayload);
+            const payloadDetail = errorPayload.detail || errorPayload.error || errorPayload;
+            detail = (typeof payloadDetail === 'string')
+                ? payloadDetail
+                : JSON.stringify(payloadDetail);
         } catch (error) {
             // Ignore JSON parse failure and keep the status text.
         }
@@ -35,14 +38,16 @@ async function backendRequest(path, options = {}) {
 
 async function registerPairedParticipant() {
     const profile = experimentData.participantProfile || {};
+    const age = parseInt(profile.age, 10);
+    const gender = String(profile.gender || '').trim();
 
-    if (!profile.age || !profile.gender) {
-        throw new Error('缺少年龄或性别，无法注册对照组参与者。');
+    if (!Number.isInteger(age) || age < 1 || age > 120 || !gender) {
+        throw new Error('被试信息不完整：请先完成前测中的年龄和性别。');
     }
 
     const payload = {
-        age: profile.age,
-        gender: profile.gender,
+        age,
+        gender,
         group_type: experimentData.group || ''
     };
 

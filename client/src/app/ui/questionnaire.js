@@ -347,11 +347,13 @@ function createQuestionnaireTrial(phase, questionnaireConfig) {
             if (questionnaireConfig.pages) {
                 initMultiPageLogic();
             }
+            applyAutosaveDraftToQuestionnaire();
 
         },
         on_finish: function(data) {
             experimentData.responses[phase] = data.response;
             experimentData.timestamps[`${phase}_end`] = getCurrentTimestamp();
+            experimentData.__autosaveDraftForm = null;
 
             if (phase === 'pretest' && data.response) {
                 const age = parseInt(data.response.pt_age, 10);
@@ -366,6 +368,40 @@ function createQuestionnaireTrial(phase, questionnaireConfig) {
             }
         }
     };
+}
+
+function applyAutosaveDraftToQuestionnaire() {
+    const draft = experimentData.__autosaveDraftForm;
+    if (!draft || !draft.values || typeof draft.values !== 'object') {
+        return;
+    }
+    Object.keys(draft.values).forEach((name) => {
+        const val = draft.values[name];
+        const nodes = document.querySelectorAll(`[name="${name}"]`);
+        if (!nodes || !nodes.length) return;
+        const t = (nodes[0].type || '').toLowerCase();
+
+        if (t === 'radio') {
+            nodes.forEach((node) => {
+                node.checked = String(node.value) === String(val);
+            });
+            return;
+        }
+
+        if (t === 'checkbox') {
+            const selected = new Set(Array.isArray(val) ? val.map(String) : [String(val)]);
+            nodes.forEach((node) => {
+                node.checked = selected.has(String(node.value));
+            });
+            return;
+        }
+
+        nodes.forEach((node) => {
+            node.value = val == null ? '' : String(val);
+            node.dispatchEvent(new Event('input', { bubbles: true }));
+            node.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
 }
 
 // 3. 多页 HTML 生成器
@@ -576,6 +612,28 @@ function initConditionalLogic() {
     window.updateConditionalQuestions();
 }
 
+function syncRequiredForActivePage() {
+    const pages = document.querySelectorAll('.survey-page');
+    if (!pages.length) return;
+
+    pages.forEach((page) => {
+        const isActive = page.classList.contains('active');
+        const fields = page.querySelectorAll('input, textarea, select');
+        fields.forEach((field) => {
+            if (!field.dataset.originalRequired) {
+                field.dataset.originalRequired = field.required ? 'true' : 'false';
+            }
+            if (isActive) {
+                if (field.dataset.originalRequired === 'true' && !field.disabled) {
+                    field.required = true;
+                }
+            } else {
+                field.required = false;
+            }
+        });
+    });
+}
+
 window.changePage = function(pageIndex) {
     const pages = document.querySelectorAll('.survey-page');
     if(pages.length === 0) return; // 防错
@@ -586,6 +644,7 @@ window.changePage = function(pageIndex) {
     if(targetPage) targetPage.classList.add('active');
     
     window.currentPage = pageIndex;
+    syncRequiredForActivePage();
     // 回到顶部
     const container = document.querySelector('.survey-container');
     if(container) container.scrollIntoView({behavior: 'smooth'});
