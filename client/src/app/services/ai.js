@@ -3,6 +3,14 @@ function getAiProxyUrl() {
     return `${EXPERIMENT_CONFIG.BACKEND_BASE_URL}/ai/chat`;
 }
 
+function fetchWithTimeout(url, options, timeoutMs) {
+    const ms = timeoutMs || (EXPERIMENT_CONFIG && EXPERIMENT_CONFIG.AI_FEEDBACK_TIMEOUT_MS) || 120000;
+    const controller = new AbortController();
+    const to = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { ...options, signal: controller.signal })
+        .finally(() => clearTimeout(to));
+}
+
 async function callTutorAPI() {
     // 定义 loading 元素的 ID
     const loadingId = 'tutor-loading';
@@ -206,8 +214,8 @@ async function generateSupervisorFeedback() {
             .join('\n');
         
         const apiUrl = getAiProxyUrl();
-        
-        const response = await fetch(apiUrl, {
+
+        const response = await fetchWithTimeout(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -334,12 +342,14 @@ async function generateSupervisorFeedback() {
         
     } catch (error) {
         console.error('AI督导反馈生成错误:', error);
+        const errMsg = (error.name === 'AbortError') ? '请求超时，请再试一次。' : error.message;
         document.getElementById('supervisorContent').innerHTML = `
             <div style="background:#fff; padding:40px; border-radius:8px; box-shadow:0 4px 15px rgba(0,0,0,0.1); color: #e74c3c;">
                 <h3>⚠️ 生成报告时遇到问题</h3>
-                <p>${error.message}</p>
-                <div style="text-align: center; margin-top: 20px;">
-                    <button class="jspsych-btn" onclick="finishSupervisorFeedback()">跳过此步骤</button>
+                <p>${errMsg}</p>
+                <div style="text-align: center; margin-top: 20px; display:flex; gap:12px; justify-content:center;">
+                    <button class="jspsych-btn" onclick="generateSupervisorFeedback()" style="padding:10px 24px; background:#3498db; color:white; border:none; border-radius:4px; cursor:pointer;">再试一次</button>
+                    <button class="jspsych-btn" onclick="finishSupervisorFeedback()" style="padding:10px 24px; background:#95a5a6; color:white; border:none; border-radius:4px; cursor:pointer;">继续</button>
                 </div>
             </div>
         `;
@@ -691,28 +701,33 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
         return;
     }
 
-    try {
-        const feedback = await callPracticeFeedbackAPI(data, mode);
-        document.getElementById('supFeedbackLoading').style.display = 'none';
-        const resultDiv = document.getElementById('supFeedbackResult');
-        const statusEl = document.getElementById('peerFeedbackStatusText');
-        const timerEl = document.getElementById('peerFeedbackTimer');
+    const loadingDiv = document.getElementById('supFeedbackLoading');
+    const resultDiv = document.getElementById('supFeedbackResult');
+    const btnContainer = document.getElementById('supFeedbackBtnContainer');
+    const statusEl = document.getElementById('peerFeedbackStatusText');
+    const timerEl = document.getElementById('peerFeedbackTimer');
+    const loadingHTML = '<div style="display:inline-block; width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #555; border-radius:50%; animation:spin 1s linear infinite;"></div><p style="color:#666; margin-top:20px;">督导正在深度阅读并分析您的对话记录...</p>';
+
+    const applySuccessUI = (feedback) => {
+        if (!experimentData.supervisorFeedbackByPractice) {
+            experimentData.supervisorFeedbackByPractice = {};
+        }
+        experimentData.supervisorFeedbackByPractice[type] = feedback;
+        experimentData.supervisorFeedback = feedback;
+        if (typeof window.persistAutosaveNow === 'function') {
+            window.persistAutosaveNow('supervisor_feedback', true).catch(() => {});
+        }
+        loadingDiv.style.display = 'none';
         resultDiv.innerHTML = feedback
             .replace(/### (.*)/g, '<h4 style="color:#222; border-bottom:1px solid #ddd; padding-bottom:5px; margin-top:25px;">$1</h4>')
             .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#222; background:#f5f5f5; padding:0 4px; border-radius:3px;">$1</strong>')
             .replace(/维度(\d+)：/g, '<div style="display:inline-block; padding:2px 10px; background:#444; color:white; border-radius:4px; font-size:13px; margin-top:10px;">维度 $1</div>');
         resultDiv.style.display = 'block';
-        document.getElementById('supFeedbackBtnContainer').style.display = 'block';
-        if (statusEl) {
-            statusEl.textContent = 'AI督导已提交反馈，请认真阅读。';
-        }
+        btnContainer.style.display = 'block';
+        if (statusEl) statusEl.textContent = 'AI督导已提交反馈，请认真阅读。';
         let readSeconds = 5 * 60;
-        if (timerEl) {
-            timerEl.textContent = '阅读剩余 05:00';
-        }
-        if (window.supervisorReadCountdownTimer) {
-            clearInterval(window.supervisorReadCountdownTimer);
-        }
+        if (timerEl) timerEl.textContent = '阅读剩余 05:00';
+        if (window.supervisorReadCountdownTimer) clearInterval(window.supervisorReadCountdownTimer);
         window.supervisorReadCountdownTimer = setInterval(() => {
             readSeconds -= 1;
             if (timerEl) {
@@ -726,10 +741,30 @@ async function showSupervisorFeedbackUI(data, type, options = {}) {
                 cleanupAndProceed();
             }
         }, 1000);
-    } catch (e) {
-        document.getElementById('supFeedbackLoading').innerHTML = "<p style='color:red;'>抱歉，报告生成遇到一点小问题，请点击下方按钮继续。</p>";
-        document.getElementById('supFeedbackBtnContainer').style.display = 'block';
-    }
+    };
+
+    const showErrorAndRetry = (err) => {
+        const errMsg = (err && err.name === 'AbortError') ? '请求超时，请再试一次。' : (err && err.message) || '未知错误';
+        loadingDiv.innerHTML = `<p style='color:red;'>抱歉，报告生成遇到一点小问题。</p><p style='color:#666; font-size:14px; margin-top:8px;'>${errMsg}</p><div style="margin-top:16px;"><button id="retrySupFeedbackBtn" style="padding:10px 24px; background:#3498db; color:white; border:none; border-radius:4px; cursor:pointer;">再试一次</button></div>`;
+        loadingDiv.style.display = 'block';
+        btnContainer.style.display = 'block';
+        document.getElementById('retrySupFeedbackBtn').onclick = attemptFetch;
+    };
+
+    const attemptFetch = async () => {
+        loadingDiv.innerHTML = loadingHTML;
+        loadingDiv.style.display = 'block';
+        resultDiv.style.display = 'none';
+        btnContainer.style.display = 'none';
+        try {
+            const feedback = await callPracticeFeedbackAPI(data, mode);
+            applySuccessUI(feedback);
+        } catch (e) {
+            showErrorAndRetry(e);
+        }
+    };
+
+    await attemptFetch();
 }
 
 
@@ -761,7 +796,7 @@ async function callPracticeFeedbackAPI(data, mode = 'supervisor') {
     
     要求：语气专业、严谨且具有指导意义。`;
 
-    const response = await fetch(getAiProxyUrl(), {
+    const response = await fetchWithTimeout(getAiProxyUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

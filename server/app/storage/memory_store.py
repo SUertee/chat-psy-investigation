@@ -149,6 +149,14 @@ class MemoryStore:
             return {"status": "waiting", "participant_id": participant_id}
         return {"status": "not_joined", "participant_id": participant_id}
 
+    def leave_match_queue(self, participant_id: str) -> dict[str, Any]:
+        """从等待队列移除，幂等。"""
+        try:
+            self.waiting_queue.remove(participant_id)
+            return {"status": "left", "participant_id": participant_id}
+        except ValueError:
+            return {"status": "not_in_queue", "participant_id": participant_id}
+
     def get_room(self, room_id: str) -> dict[str, Any]:
         room = self.rooms.get(room_id)
         if room is None:

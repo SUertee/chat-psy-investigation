@@ -8,9 +8,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 restoreInfo = getAutosaveRestoreInfo() || restoreInfo;
             }
             if (restoreInfo && restoreInfo.available) {
+                if (typeof downloadAutosaveBackup === 'function') {
+                    try { downloadAutosaveBackup(); } catch (e) { console.warn('[AUTOSAVE] backup download failed:', e); }
+                }
                 const savedAt = restoreInfo.savedAt || '未知时间';
                 const shouldResume = window.confirm(
-                    `检测到未完成实验进度（最近保存：${savedAt}）。\n\n点击“确定”继续；点击“取消”重新开始。`
+                    `检测到未完成实验进度（最近保存：${savedAt}）。\n\n当前数据已自动下载到您的电脑作为备份。\n\n点击“确定”继续当前进度；点击“取消”放弃当前进度并重新开始实验。`
                 );
                 if (!shouldResume) {
                     if (typeof rotateAutosaveSession === 'function') {
@@ -36,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
         display_element: 'jspsych-target',
-        on_finish: function() {
+        on_finish: async function() {
             // 实验结束后保存数据
             experimentData.timestamps.end = experimentData.timestamps.end || getCurrentTimestamp();
             if (typeof persistAutosaveNow === 'function') {
@@ -44,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.warn('[AUTOSAVE] finish save failed:', error);
                 });
             }
-            saveData();
+            if (typeof saveData === 'function') await saveData();
             if (typeof stopAutosave === 'function') {
                 stopAutosave();
             }

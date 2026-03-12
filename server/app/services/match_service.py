@@ -11,3 +11,7 @@ def join_match(participant_id: str) -> dict:
 
 def get_match_status(participant_id: str) -> dict:
     return store.get_match_status(participant_id)
+
+
+def leave_match_queue(participant_id: str) -> dict:
+    return store.leave_match_queue(participant_id)

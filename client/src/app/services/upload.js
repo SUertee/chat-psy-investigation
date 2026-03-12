@@ -2,21 +2,19 @@
 function uploadToServer(blob, fileName) {
     const formData = new FormData();
     formData.append('file', blob, fileName);
-    
-    fetch(EXPERIMENT_CONFIG.DATA_UPLOAD_URL, {
+
+    return fetch(EXPERIMENT_CONFIG.DATA_UPLOAD_URL, {
         method: 'POST',
         body: formData
     })
-    .then(response => {
-        if (response.ok) {
-            console.log('数据上传成功');
-        } else {
-            console.error('数据上传失败');
-        }
-    })
-    .catch(error => {
-        console.error('上传错误:', error);
-    });
+        .then((response) => {
+            if (!response.ok) throw new Error('云端上传失败');
+            return response;
+        })
+        .catch((error) => {
+            console.error('上传错误:', error);
+            throw error;
+        });
 }
 
 function uploadExcelToLocalResult(blob, fileName, participantId = '') {
@@ -47,7 +45,7 @@ function uploadExcelToLocalResult(blob, fileName, participantId = '') {
         })
         .catch((error) => {
             console.error('Excel 本地保存失败:', error);
-            return null;
+            throw error;
         });
 }
 
@@ -86,6 +84,6 @@ function uploadResultSnapshot(snapshotPayload) {
         })
         .catch((error) => {
             console.error('本地结果保存失败:', error);
-            return null;
+            throw error;
         });
 }

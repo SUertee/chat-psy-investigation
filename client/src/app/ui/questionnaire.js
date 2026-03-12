@@ -449,8 +449,8 @@ function generateMultiPageHTML(pages, phaseId) {
     
     html += `</div>`; // end container
     
-    // 隐藏 jsPsych 默认的提交按钮，完全由我们接管
-    html += `<style>.jspsych-btn { display: none !important; }</style>`;
+    // 仅隐藏 survey-html-form 插件自带的默认提交按钮，避免误伤其他 jspsych-btn。
+    html += `<style>#jspsych-survey-html-form-next { display: none !important; }</style>`;
     
     return html;
 }

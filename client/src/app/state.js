@@ -76,6 +76,7 @@ let experimentData = {
     chatMode: 'ai',
     crisisAssessment: {},
     supervisorFeedback: '',
+    supervisorFeedbackByPractice: {},
     __autosaveTrialCount: 0,
     __autosaveDraftForm: null
 };

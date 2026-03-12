@@ -497,12 +497,12 @@ function getChatAvatarLabel(sender) {
     }
     const isPaired = experimentData && experimentData.chatMode === 'paired';
     if (!isPaired) {
-        return sender === 'ai' ? '来' : '我';
+        return sender === 'ai' ? '访' : '我';
     }
 
     const isCounselor = !!(experimentData.controlPairing && experimentData.controlPairing.isCounselor);
     if (sender === 'ai') {
-        return isCounselor ? '来' : '资';
+        return isCounselor ? '访' : '咨';
     }
     return '我';
 }

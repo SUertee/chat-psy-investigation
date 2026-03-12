@@ -131,7 +131,19 @@
     }
 
     function saveLocalSnapshot(snapshot) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+        } catch (error) {
+            // 控制台提示，方便研究者排查
+            console.warn('[AUTOSAVE] localStorage 写入失败，可能空间已满：', error);
+
+            // 给被试的简单说明：本地自动恢复可能失效，但还有其他备份方式
+            alert(
+                '浏览器本地空间不足，无法继续自动保存进度。\n' +
+                '请尽量在本次实验中一次性完成，最终结果仍会通过下载文件或服务器保存。'
+            );
+            // 不再向外抛出错误，避免打断当前实验流程或远程上传
+        }
     }
 
     function loadLocalSnapshot() {
@@ -170,11 +182,13 @@
         RUNTIME.sessionId = createSessionId();
         RUNTIME.seq = 0;
         RUNTIME.restoreInfo = { available: false, resumeTrialIndex: 0 };
+        RUNTIME.skipBeforeUnloadSave = true; // 取消重新开始时，避免 beforeunload 再次写入
         localStorage.removeItem(STORAGE_KEY);
     }
 
     function persistAutosave(reason, options = {}) {
         if (!RUNTIME.initialized || !RUNTIME.enabled) return Promise.resolve(null);
+        if (RUNTIME.skipBeforeUnloadSave) return Promise.resolve(null);
         RUNTIME.seq += 1;
         const snapshot = buildSnapshot(reason);
         saveLocalSnapshot(snapshot);
@@ -201,6 +215,7 @@
         });
         window.addEventListener('beforeunload', function () {
             try {
+                if (RUNTIME.skipBeforeUnloadSave) return;
                 RUNTIME.seq += 1;
                 const snapshot = buildSnapshot('beforeunload');
                 saveLocalSnapshot(snapshot);
@@ -262,6 +277,25 @@
         RUNTIME.initialized = true;
     }
 
+    function downloadAutosaveBackup() {
+        const snapshot = loadLocalSnapshot();
+        if (!snapshot || typeof snapshot !== 'object') return;
+        try {
+            const json = JSON.stringify(snapshot, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const pid = (snapshot.participant_id || snapshot.session_id || 'unknown').replace(/[<>:"/\\|?*]/g, '_');
+            const savedAt = (snapshot.saved_at || '').replace(/[:.]/g, '-').slice(0, 19) || Date.now();
+            const fileName = `experiment_backup_${pid}_${savedAt}.json`;
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        } catch (e) {
+            console.warn('[AUTOSAVE] download backup failed:', e);
+        }
+    }
+
     window.initAutosave = initAutosave;
     window.stopAutosave = stopAutosave;
     window.persistAutosaveNow = function (reason, remote) {
@@ -271,4 +305,5 @@
         return deepClone(RUNTIME.restoreInfo) || { available: false, resumeTrialIndex: 0 };
     };
     window.rotateAutosaveSession = rotateSession;
+    window.downloadAutosaveBackup = downloadAutosaveBackup;
 })();

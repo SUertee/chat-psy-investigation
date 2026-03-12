@@ -13,6 +13,33 @@ function createProgressNode(percent, icon) {
     };
 }
 
+function setupEmergencyNextShortcut() {
+    const pressedKeys = new Set();
+    document.addEventListener('keydown', function(e) {
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        const k = e.key.toLowerCase();
+        if (k === 'n') {
+            pressedKeys.add('n');
+            if (e.altKey && pressedKeys.has('=')) doTrigger(e);
+        } else if (e.key === '=') {
+            pressedKeys.add('=');
+            if (e.altKey && pressedKeys.has('n')) doTrigger(e);
+        }
+    }, true);
+    document.addEventListener('keyup', function(e) {
+        const k = e.key.toLowerCase();
+        if (k === 'alt') pressedKeys.clear();
+        else if (k === 'n' || e.key === '=') pressedKeys.delete(k === 'n' ? 'n' : '=');
+    }, true);
+    function doTrigger(e) {
+        e.preventDefault();
+        if (typeof jsPsych === 'undefined' || !jsPsych.getCurrentTrial) return;
+        if (!jsPsych.getCurrentTrial()) return;
+        jsPsych.finishTrial();
+    }
+}
+
 function isControlChatDebugMode() {
     const params = new URLSearchParams(window.location.search);
     return params.get('debugMode') === 'control-chat';
@@ -96,6 +123,7 @@ async function startExperiment(resumeInfo = null) {
 
     // 初始化新进度条 (初始 5%)
     initCustomProgressBar();
+    setupEmergencyNextShortcut();  // 紧急下一页：Alt+N+= 同时按下
     updateCustomProgress(5); 
 
     if (!experimentData.startTime) {

@@ -378,6 +378,20 @@ function createControlConnectionBriefTrial(promptKey) {
         stimulus: createConnectionBriefCard,
         choices: [],
         on_load: async function() {
+            // 关闭/离开配对页时离开队列，避免幽灵被试
+            const baseUrl = (EXPERIMENT_CONFIG.BACKEND_BASE_URL || '').replace(/\/$/, '');
+            if (baseUrl && experimentData.participantId) {
+                const shouldLeave = (experimentData.group === 'control' || experimentData.controlPairing?.timeoutFallback)
+                    && !experimentData.controlPairing?.roomId;
+                if (shouldLeave) {
+                    const leaveQueue = () => {
+                        const blob = new Blob([JSON.stringify({ participant_id: experimentData.participantId })], { type: 'application/json' });
+                        navigator.sendBeacon(`${baseUrl}/match/leave`, blob);
+                    };
+                    window.addEventListener('beforeunload', leaveQueue);
+                }
+            }
+
             const loadingBlock = document.getElementById('connectionLoadingBlock');
             const continueBtn = document.getElementById('connectionContinueBtn');
             const successBlock = document.getElementById('connectionSuccessBlock');
@@ -482,9 +496,7 @@ function createControlConnectionBriefTrial(promptKey) {
                         experimentData.group = 'experimental';
                         const waitedSeconds = Math.floor((pairing.waitedMs || 300000) / 1000);
                         successBlock.innerHTML = `
-                            <p style="margin: 0;"><strong>连接等待超时，系统将继续下一阶段。</strong></p>
-                            <p style="margin: 6px 0 0 0;">等待时长：约 ${waitedSeconds} 秒</p>
-                            <p style="margin: 2px 0 0 0;">点击“继续”后将切换到实验组会话准备页。</p>
+                            <p style="margin: 0;"><strong>正在进入下一阶段。</strong></p>
                         `;
                         successBlock.style.display = 'block';
                         if (continueBtn) {
@@ -495,7 +507,7 @@ function createControlConnectionBriefTrial(promptKey) {
                             continueBtn.style.cursor = 'pointer';
                             continueBtn.onclick = function() {
                                 const roundNo = getPracticeRoundNo(promptKey);
-                                loadingBlock.innerHTML = '<p style="margin: 0; color:#666;"><strong>已切换到实验组，正在进入会话准备...</strong></p>';
+                                loadingBlock.innerHTML = '<p style="margin: 0; color:#666;"><strong>正在进入会话准备...</strong></p>';
                                 successBlock.innerHTML = getCounselorInstructionHTML(roundNo, '来访者：由AI扮演');
                                 successBlock.style.display = 'block';
                                 continueBtn.textContent = '开始会话';
@@ -1149,7 +1161,7 @@ function showCrisisAssessmentModal() {
                 style="width:100%; height:120px; padding:10px; border:1px solid #ddd; border-radius:4px; resize:none; font-family:inherit;"></textarea>
             
             <div style="text-align: center; margin-top: 20px;">
-                <button class="jspsych-btn" id="submitAssessmentBtn" 
+                <button class="modal-submit-btn" id="submitAssessmentBtn" 
                     style="padding: 10px 40px; background:#e91e63; color:white; border:none; border-radius:4px; cursor:pointer;"
                     onclick="handleModalAssessmentSubmit()">提交评估并继续</button>
             </div>

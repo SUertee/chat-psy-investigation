@@ -84,6 +84,16 @@ async function fetchMatchStatus() {
     return backendRequest(`/match/status/${encodeURIComponent(experimentData.participantId)}`);
 }
 
+async function leaveMatchQueue() {
+    if (!experimentData.participantId) return;
+    try {
+        await backendRequest('/match/leave', {
+            method: 'POST',
+            body: JSON.stringify({ participant_id: experimentData.participantId })
+        });
+    } catch (e) { /* 忽略 */ }
+}
+
 function activateControlTimeoutFallback(promptKey, waitedMs) {
     const fallbackAt = getCurrentTimestamp();
     if (promptKey === 'PRACTICE_1') {
@@ -100,6 +110,8 @@ function activateControlTimeoutFallback(promptKey, waitedMs) {
     experimentData.controlPairing.timeoutFallbackPromptKey = promptKey || '';
     experimentData.controlPairing.timeoutFallbackWaitMs = waitedMs;
     experimentData.timestamps.control_match_timeout_fallback_at = fallbackAt;
+    // 超时回退时立即离开队列，避免成为幽灵被试
+    leaveMatchQueue().catch(() => {});
 }
 
 function switchControlParticipantToExperimentalFlow(reason = 'match_timeout') {

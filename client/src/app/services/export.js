@@ -1,5 +1,5 @@
 // Data export helpers.
-function saveData() {
+async function saveData() {
     const ts = experimentData.timestamps || {};
     const responses = experimentData.responses || {};
     const control = experimentData.controlPairing || {};
@@ -119,8 +119,11 @@ function saveData() {
         addEvent('peer_feedback', 'control_client_feedback', `feedback_${idx + 1}`, item, item.timestamp || '');
     });
 
-    // AI督导反馈
-    addEvent('ai_feedback', 'supervisor', 'full_text', experimentData.supervisorFeedback || '');
+    // AI督导反馈（按练习类型保存，不覆盖）
+    const byPractice = experimentData.supervisorFeedbackByPractice || {};
+    addEvent('ai_feedback', 'supervisor', 'p1', byPractice.P1 || '');
+    addEvent('ai_feedback', 'supervisor', 'p2', byPractice.P2 || '');
+    addEvent('ai_feedback', 'supervisor', 'p3', byPractice.P3 || '');
 
     // 问卷（完整保存）
     Object.entries(responses).forEach(([phase, payload]) => {
@@ -220,6 +223,10 @@ function saveData() {
         control_client_feedbacks_json: safeStringify(responses.client_feedbacks || []),
         scripted_simulation_json: safeStringify(responses.scripted_simulation || []),
         ai_supervisor_feedback_text: experimentData.supervisorFeedback || '',
+        ai_supervisor_feedback_p1: byPractice.P1 || '',
+        ai_supervisor_feedback_p2: byPractice.P2 || '',
+        ai_supervisor_feedback_p3: byPractice.P3 || '',
+        supervisor_feedback_by_practice_json: safeStringify(byPractice),
 
         full_timestamps_json: safeStringify(ts),
         full_responses_json: safeStringify(responses),
@@ -311,7 +318,26 @@ function saveData() {
     link.download = fileName;
     link.click();
 
-    uploadToServer(blob, fileName);
-    uploadExcelToLocalResult(blob, fileName, experimentData.participantId || '');
-    uploadResultSnapshot(resultSnapshot);
+    const statusEl = document.createElement('div');
+    statusEl.id = 'upload-status-msg';
+    statusEl.textContent = '正在保存数据，请勿关闭页面...';
+    statusEl.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#ffc107;padding:8px;text-align:center;z-index:9999;';
+    document.body.appendChild(statusEl);
+
+    const failed = [];
+    const run = async (name, fn) => {
+        try {
+            await fn();
+        } catch (e) {
+            failed.push(name);
+        }
+    };
+    await run('云端上传', () => uploadToServer(blob, fileName));
+    await run('Excel 保存', () => uploadExcelToLocalResult(blob, fileName, experimentData.participantId || ''));
+    await run('结果保存', () => uploadResultSnapshot(resultSnapshot));
+
+    statusEl.remove();
+    if (failed.length) {
+        alert('以下数据上传失败：' + failed.join('、') + '。\n\n您的数据已下载到电脑，请妥善保管。');
+    }
 }
